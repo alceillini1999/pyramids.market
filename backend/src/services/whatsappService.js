@@ -1,16 +1,4 @@
-/**
- * whatsappService - singleton wrapper around whatsapp-web.js Client
- * Uses LocalAuth if available (preferred). Stores QR as latest QR string.
- * Exposes:
- *  - init()
- *  - getStatus()
- *  - getQRCode() -> dataURL or null
- *  - sendMessage(phone, text, attachments)
- *  - sendBulk(clientsArray, text, attachments, progressCallback)
- *
- * Note: This service depends on `whatsapp-web.js` and `qrcode`.
- */
-
+// backend/src/services/whatsappService.js
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const path = require('path');
@@ -20,24 +8,30 @@ const ClientModel = require('../models/Client');
 let clientInstance = null;
 let latestQR = null;
 let connected = false;
+let initialized = false;
 
-function init() {
-  if (clientInstance) return clientInstance;
+function createClientInstance() {
+  const puppeteerOpts = {
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+  };
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    puppeteerOpts.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
 
   const client = new Client({
     authStrategy: new LocalAuth({
       dataPath: process.env.WHATSAPP_SESSION_PATH || './whatsapp-session'
     }),
-    puppeteer: { headless: true, args: ['--no-sandbox','--disable-setuid-sandbox'] }
+    puppeteer: puppeteerOpts
   });
 
   client.on('qr', async (qr) => {
-    latestQR = qr;
     try {
-      const dataUrl = await qrcode.toDataURL(qr);
-      latestQR = dataUrl;
+      latestQR = await qrcode.toDataURL(qr);
     } catch (err) {
-      console.warn('QR to dataURL failed', err.message);
+      latestQR = null;
+      console.warn('QR to dataURL failed', err && err.message);
     }
     console.log('WhatsApp QR received');
   });
@@ -60,13 +54,35 @@ function init() {
   client.on('disconnected', (reason) => {
     connected = false;
     console.log('WhatsApp disconnected', reason);
-    // try to reinitialize after a short delay
-    setTimeout(()=>{ try { client.initialize(); } catch(e){ console.warn('reinit failed', e.message) } }, 3000);
+    // try to reinitialize later
+    setTimeout(async () => {
+      try { await client.initialize(); }
+      catch (e) { console.warn('reinit failed', e && e.message); }
+    }, 5000);
   });
 
-  client.initialize().catch(err => console.error('WhatsApp init error', err));
-  clientInstance = client;
   return client;
+}
+
+async function init() {
+  if (initialized) return;
+  if (process.env.SKIP_WHATSAPP_INIT === 'true') {
+    console.log('SKIP_WHATSAPP_INIT set — skipping whatsapp init.');
+    initialized = true;
+    return;
+  }
+
+  try {
+    clientInstance = createClientInstance();
+    await clientInstance.initialize();
+    initialized = true;
+    console.log('WhatsApp service initialized.');
+  } catch (err) {
+    // Do NOT throw — only log and allow server to continue running
+    console.error('WhatsApp init error', err && err.message ? err.message : err);
+    // keep latestQR as-is (could be null)
+    initialized = false;
+  }
 }
 
 function getStatus() {
@@ -74,47 +90,43 @@ function getStatus() {
 }
 
 async function getQRCode() {
-  return latestQR; // dataURL or null
+  return latestQR;
 }
 
 async function sendMessage(phone, text, attachments=[]) {
-  if (!clientInstance) init();
-  // Normalize phone to include country code digits only
+  if (!clientInstance) {
+    return { ok:false, error: 'WhatsApp client not initialized' };
+  }
   const normalized = phone.replace(/\D/g,'');
   const id = normalized + "@c.us";
   try {
-    // log pending
     const log = new WhatsAppLog({ phone: normalized, messageText: text, attachments, status:'pending' });
     await log.save();
-    // send message
+
     if (attachments && attachments.length) {
-      // for simplicity assume attachments are URLs - send as media messages
       const { MessageMedia } = require('whatsapp-web.js');
       for (const url of attachments) {
         try {
           const media = await MessageMedia.fromUrl(url);
           await clientInstance.sendMessage(id, media, { caption: text });
-        } catch (err) {
-          console.warn('media send failed', err.message);
-        }
+        } catch (err) { console.warn('media send failed', err && err.message); }
       }
     } else {
       await clientInstance.sendMessage(id, text);
     }
+
     log.status = 'sent';
     log.sentAt = new Date();
     await log.save();
     return { ok:true };
   } catch (err) {
-    console.error('sendMessage error', err);
     const log = new WhatsAppLog({ phone: phone, messageText: text, attachments, status:'failed' });
     await log.save();
-    return { ok:false, error: err.message };
+    return { ok:false, error: err && err.message ? err.message : 'send failed' };
   }
 }
 
 async function sendBulk(clientIds = [], text='', attachments = [], progressCb = null) {
-  if (!clientInstance) init();
   const results = [];
   for (let i = 0; i < clientIds.length; i++) {
     const clientId = clientIds[i];
@@ -128,10 +140,9 @@ async function sendBulk(clientIds = [], text='', attachments = [], progressCb = 
       const res = await sendMessage(client.phone, text, attachments);
       results.push({ clientId, phone: client.phone, res });
     } catch (err) {
-      results.push({ clientId, ok:false, error: err.message });
+      results.push({ clientId, ok:false, error: err && err.message ? err.message : 'error' });
     }
     if (progressCb) progressCb(i+1, clientIds.length);
-    // small delay to avoid rate limits
     await new Promise(r => setTimeout(r, 500));
   }
   return results;
