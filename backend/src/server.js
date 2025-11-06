@@ -4,8 +4,6 @@ const helmet = require('helmet');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
-// initialize whatsapp service
-try { require('./services/whatsappService').init(); } catch(e){ console.warn('WhatsApp service failed to init', e.message) }
 
 const app = express();
 app.use(helmet());
@@ -13,15 +11,34 @@ app.use(cors());
 app.use(express.json());
 
 // simple health
-app.get('/api/healthz', (req, res) => res.json({ok:true, name:'pyramids-mart-backend'}));
+app.get('/api/healthz', (req, res) => res.json({ status: 'ok', name:'pyramids-mart-backend' }));
+
+// mount routers (skeleton) - require later to avoid crash if DB not ready
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/clients', require('./routes/clients'));
+app.use('/api/products', require('./routes/products'));
+app.use('/api/expenses', require('./routes/expenses'));
+app.use('/api/sales', require('./routes/sales'));
+app.use('/api/whatsapp', require('./routes/whatsapp'));
+app.use('/api/uploads', require('./routes/uploads'));
+app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
+
+// Error handlers to catch synchronous and async errors and log them
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION ➜', err && err.stack ? err.stack : err);
+  // Do not exit immediately; log and let Render restart if needed
+});
+process.on('unhandledRejection', (reason, p) => {
+  console.error('UNHANDLED REJECTION at Promise', p, 'reason:', reason);
+});
 
 // connect to mongo
 const MONGO = process.env.MONGO_URI || 'mongodb://localhost:27017/pyramidsmart';
 mongoose.connect(MONGO, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(async ()=>{ console.log('Mongo connected'); await ensureAdmin(); })
-  .catch(err=>console.error('Mongo error', err));
-
-// mount routers (skeleton)
+  .then(()=>console.log('Mongo connected'))
+  .catch(err=>{
+    console.error('Mongo connection error:', err && err.message ? err.message : err);
+  });
 
 // create initial admin user if ADMIN_EMAIL and ADMIN_PASSWORD are set
 const User = require('./models/User');
@@ -29,7 +46,10 @@ const bcrypt = require('bcryptjs');
 async function ensureAdmin(){
   const adminEmail = process.env.ADMIN_EMAIL;
   const adminPass = process.env.ADMIN_PASSWORD;
-  if (!adminEmail || !adminPass) return;
+  if (!adminEmail || !adminPass) {
+    console.log('ADMIN_EMAIL or ADMIN_PASSWORD not provided — skipping admin bootstrap.');
+    return;
+  }
   try {
     const exists = await User.findOne({ email: adminEmail.toLowerCase() });
     if (!exists) {
@@ -42,18 +62,18 @@ async function ensureAdmin(){
       console.log('Admin user already exists.');
     }
   } catch (err) {
-    console.error('Admin creation error', err);
+    console.error('Admin creation error', err && err.message ? err.message : err);
   }
 }
 
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/clients', require('./routes/clients'));
-app.use('/api/products', require('./routes/products'));
-app.use('/api/expenses', require('./routes/expenses'));
-app.use('/api/sales', require('./routes/sales'));
-app.use('/api/whatsapp', require('./routes/whatsapp'));
-app.use('/api/uploads', require('./routes/uploads'));
-app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
+// Call ensureAdmin after a short delay so DB has time to connect (non-blocking)
+setTimeout(() => {
+  ensureAdmin().catch(e => console.error('ensureAdmin failed:', e));
+}, 3000);
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, ()=> console.log(`Server running on port ${PORT}`));
+// Start server and bind to the Render-provided port (process.env.PORT)
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
+app.listen(PORT, () => {
+  console.log(`Server started and listening on port ${PORT}`);
+  console.log('NODE_ENV=', process.env.NODE_ENV || 'development');
+});
