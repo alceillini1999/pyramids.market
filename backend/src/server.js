@@ -34,16 +34,15 @@ process.on('unhandledRejection', (reason, p) => {
 
 // connect to mongo
 const MONGO = process.env.MONGO_URI || 'mongodb://localhost:27017/pyramidsmart';
-mongoose.connect(MONGO, { 
-  useNewUrlParser: true, 
-  useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 30000, // wait up to 30s to find server
-  socketTimeoutMS: 45000           // close sockets after 45s of inactivity
-})
-  .then(()=>{
+mongoose.connect(MONGO, { useNewUrlParser: true, useUnifiedTopology: true, serverSelectionTimeoutMS: 30000, socketTimeoutMS: 45000 })
+  .then(async ()=>{
     console.log('Mongo connected');
-    // Once connected, ensure admin exists
-    ensureAdmin().catch(e => console.error('ensureAdmin failed:', e && e.message ? e.message : e));
+    try {
+      const { initWhatsAppService } = require('./whatsapp');
+      initWhatsAppService().catch(err => console.error('WhatsApp init error:', err && err.message ? err.message : err));
+    } catch (e) {
+      console.warn('whatsapp module not found or failed to require:', e && e.message ? e.message : e);
+    }
   })
   .catch(err=>{
     console.error('Mongo connection error:', err && err.message ? err.message : err);
@@ -75,6 +74,11 @@ async function ensureAdmin(){
   }
 }
 
+// Call ensureAdmin after a short delay so DB has time to connect (non-blocking)
+setTimeout(() => {
+  ensureAdmin().catch(e => console.error('ensureAdmin failed:', e));
+}, 3000);
+
 // Start server and bind to the Render-provided port (process.env.PORT)
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
 app.listen(PORT, () => {
@@ -82,13 +86,4 @@ app.listen(PORT, () => {
   console.log('NODE_ENV=', process.env.NODE_ENV || 'development');
   
   // تمّت إضافة جزء تهيئة واتساب بعد التشغيل
-  setTimeout(async () => {
-    try {
-      const whatsappService = require('./services/whatsappService');
-      await whatsappService.init();
-      console.log('WhatsApp init attempted.');
-    } catch (err) {
-      console.error('WhatsApp init error:', err && err.message ? err.message : err);
-    }
-  }, 2000);
 });

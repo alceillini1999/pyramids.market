@@ -1,16 +1,28 @@
-// whatsapp.js (استبدال أو إدراج الدالة التالية)
+// whatsapp.js
+// Integration with whatsapp-web.js that:
+// - tries to load a saved session from MongoDB (preferred) or /tmp (fallback)
+// - initializes whatsapp-web.js Client with proper puppeteer flags for Render
+// - saves session to MongoDB and /tmp on 'authenticated' event
+// - prevents duplicate initialization
+//
+// Environment variables used (optional):
+// - WHATSAPP_SESSION_NAME  : session name key in DB (default: 'default')
+// - WHATSAPP_SESSION_PATH  : path to tmp session file (default: /tmp/whatsapp-session/session.json)
+// - WHATSAPP_USERDATA_DIR  : path for puppeteer userDataDir if LocalAuth used (default: /tmp/whatsapp-userdata/<name>)
+// - CHROME_PATH            : optional path to Chrome executable
+//
+// NOTE: install dependencies: whatsapp-web.js, puppeteer (or puppeteer-core + chrome), mongoose already used
+// Example: npm i whatsapp-web.js puppeteer
+
 const path = require('path');
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const { loadSessionFromDB, saveSessionToDB } = require('./utils/session-db-utils');
+const { loadSessionFromTmp, saveSessionToTmp, TMP_PATH } = require('./utils/session-tmp-utils');
 
 let whatsappInstance = null;
 let isInitializing = false;
 
-const DEFAULT_SESSION_PATH = process.env.WHATSAPP_SESSION_PATH || '/tmp/whatsapp-session'; 
-// لو ربطت persistent disk استخدم: '/data/whatsapp-session'
-
-// Utility sleep
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+function sleep(ms){ return new Promise(res=>setTimeout(res, ms)); }
 
 async function initWhatsAppService(options = {}) {
   if (whatsappInstance) {
@@ -18,37 +30,37 @@ async function initWhatsAppService(options = {}) {
     return whatsappInstance;
   }
   if (isInitializing) {
-    console.log('WhatsApp init already in progress, skipping duplicate init call.');
-    // انتظار حتى تكتمل عملية التهيئة الجارية
+    console.log('WhatsApp init already in progress, waiting...');
     while (isInitializing) await sleep(500);
     return whatsappInstance;
   }
-
   isInitializing = true;
-  const sessionPath = options.sessionPath || DEFAULT_SESSION_PATH;
-  const maxRetries = options.maxRetries ?? 5;
+
+  const sessionName = options.sessionName || process.env.WHATSAPP_SESSION_NAME || 'default';
+  const maxRetries = options.maxRetries ?? 3;
   let attempt = 0;
   let lastErr = null;
 
-  // تأكد أن المجلد موجود وصلاحيات آمنة
-  const fs = require('fs');
+  // 1) Try load session from DB first, then tmp file
+  let savedSession = null;
   try {
-    fs.mkdirSync(sessionPath, { recursive: true });
-    fs.chmodSync(sessionPath, 0o700); // أمان أفضل من 0777
+    savedSession = await loadSessionFromDB(sessionName);
   } catch (e) {
-    console.warn('Could not create session dir:', e.message);
+    console.warn('loadSessionFromDB failed:', e && e.message ? e.message : e);
+  }
+  if (!savedSession) {
+    try {
+      savedSession = loadSessionFromTmp();
+    } catch (e) { /* ignore */ }
   }
 
-  while (attempt < maxRetries) {
+  while(attempt < maxRetries) {
     attempt++;
     try {
-      console.log(`WhatsApp init attempt ${attempt}/${maxRetries} (sessionDir=${sessionPath})`);
+      console.log(`WhatsApp init attempt ${attempt}/${maxRetries} (sessionName=${sessionName})`);
 
-      // ---- مثال عام: إنشاء متصفح puppeteer مع flags محمية ----
-      // إن كانت مكتبتك تسمح بتمرير هذه الخيارات يمكنك تمريرها إليها بدلاً من إنشاء browser يدوياً هنا.
-      const puppeteer = require('puppeteer');
-
-      const browser = await puppeteer.launch({
+      // Prepare puppeteer options to be safe in Render's container
+      const puppeteerOptions = {
         headless: true,
         args: [
           '--no-sandbox',
@@ -56,59 +68,79 @@ async function initWhatsAppService(options = {}) {
           '--disable-dev-shm-usage',
           '--single-process',
           '--no-zygote',
-          '--disable-gpu',
-          // '--disable-extensions'
+          '--disable-gpu'
         ],
-        userDataDir: sessionPath,
-        // executablePath: process.env.CHROME_PATH || undefined, // لو تحتاج تحديد Chrome مخصص
-      });
-
-      browser.on('disconnected', async () => {
-        console.warn('Chromium disconnected. Will attempt restart.');
-        // Mark instance removed and trigger re-init in background
-        whatsappInstance = null;
-        // small delay then try re-init (fire-and-forget)
-        setTimeout(() => initWhatsAppService({ sessionPath }), 2000);
-      });
-
-      // ----- هنا موضع تكوين مكتبة واتساب التي تستخدمها -----
-      // كمثال عام: لو كنت تستخدم whatsapp-web.js سيكون الشكل تقريباً:
-      // const { Client } = require('whatsapp-web.js');
-      // const client = new Client({ puppeteer: { browser } , session: ... });
-      // client.on('qr', qr => console.log('WhatsApp QR received'));
-      // client.on('ready', () => console.log('WhatsApp service initialized.'));
-      //
-      // أدخل هنا الكود المناسب لمكتبتك لتهيئة العميل باستخدام الـ browser أو تمرير نفس الخيارات للمكتبة.
-
-      // إذا لا تريد إنشاء browser هنا (لأن المكتبة تفعل ذلك داخليًا)،
-      // بدّل المسار أعلاه لتجعل المكتبة تستقبل puppeteer args أو userDataDir.
-
-      // Placeholder: تعيين whatsappInstance على الكائن الذي تملكه مكتبتك (client)
-      const whatsappClient = { browser, /* client: actualClient */ };
-
-      // تسجيل حدث QR واحد فقط — استخدم debounce لمنع الطباعة المتكررة
-      let lastQr = null;
-      function onQr(qr) {
-        if (qr && qr === lastQr) return; // لا نطبع نفس الـ QR مرارًا
-        lastQr = qr;
-        console.log('WhatsApp QR received');
+        dumpio: true,
+        pipe: true
+      };
+      if (process.env.CHROME_PATH) {
+        puppeteerOptions.executablePath = process.env.CHROME_PATH;
       }
 
-      // مثال: إذا لديك object client من المكتبة قم بربط الأحداث:
-      // whatsappClient.client.on('qr', onQr);
-      // whatsappClient.client.on('ready', () => console.log('WhatsApp service initialized.'));
-      // whatsappClient.client.on('auth_failure', err => console.error('Auth failure:', err));
+      const clientOptions = {
+        puppeteer: puppeteerOptions,
+        takeoverOnConflict: true,
+        authTimeoutMs: 30_000
+      };
 
-      // أخيراً، اضبط instance والflags
-      whatsappInstance = whatsappClient;
+      // If we have a saved session from DB/tmp and it matches whatsapp-web.js shape, restore it
+      if (savedSession && savedSession.clientSession) {
+        clientOptions.session = savedSession.clientSession;
+        console.log('Restoring WhatsApp session from storage (DB/tmp).');
+      } else {
+        // No saved session: use LocalAuth with ephemeral userDataDir under /tmp to reduce QR regen during single runtime.
+        // LocalAuth stores files on disk (needs persistent disk to survive deploys). We keep it under /tmp to avoid paid disk requirement.
+        const userDataDir = process.env.WHATSAPP_USERDATA_DIR || `/tmp/whatsapp-userdata-${sessionName}`;
+        clientOptions.authStrategy = new LocalAuth({ clientId: sessionName, dataPath: userDataDir });
+        console.log('No saved session found — using LocalAuth (ephemeral userDataDir):', userDataDir);
+      }
+
+      // Create the client
+      const client = new Client(clientOptions);
+
+      // Attach listeners
+      client.on('qr', (qr) => {
+        // Note: whatsapp-web.js may emit many qr events; we log it once per event.
+        console.log('WhatsApp QR received');
+      });
+
+      client.on('authenticated', async (session) => {
+        try {
+          console.log('WhatsApp authenticated - saving session');
+          // Wrap session into object for our DB schema
+          const payload = { clientSession: session };
+          await saveSessionToDB(payload, sessionName);
+          saveSessionToTmp(payload);
+        } catch (err) {
+          console.error('Error saving WhatsApp session:', err && err.message ? err.message : err);
+        }
+      });
+
+      client.on('auth_failure', (err) => {
+        console.error('WhatsApp auth failure', err && err.message ? err.message : err);
+        // Optionally remove saved session document to force fresh login next time
+      });
+
+      client.on('ready', () => {
+        console.log('WhatsApp service initialized.');
+      });
+
+      client.on('disconnected', (reason) => {
+        console.warn('WhatsApp client disconnected:', reason);
+        // Mark instance null so init can try restart
+        whatsappInstance = null;
+        // Try restart after short delay
+        setTimeout(() => initWhatsAppService({ sessionName, maxRetries }), 2000);
+      });
+
+      await client.initialize();
+      whatsappInstance = { client };
       isInitializing = false;
-      console.log('WhatsApp initialized successfully.');
       return whatsappInstance;
 
     } catch (err) {
       lastErr = err;
       console.error('WhatsApp init error:', err && err.message ? err.message : err);
-      // إن كان الخطأ متعلق بالـ Puppeteer/Chromium ممكن نزيد backoff
       const backoffMs = Math.min(1000 * Math.pow(2, attempt), 30000);
       console.log(`Waiting ${backoffMs}ms before next attempt...`);
       await sleep(backoffMs);
@@ -117,7 +149,6 @@ async function initWhatsAppService(options = {}) {
 
   isInitializing = false;
   console.error('Failed to initialize WhatsApp service after attempts:', maxRetries, 'last error:', lastErr && lastErr.message);
-  // رمي الخطأ أو إعادته أعلى حتى يتم التعامل معه
   throw lastErr;
 }
 
