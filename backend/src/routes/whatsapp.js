@@ -1,5 +1,7 @@
-// whatsapp.js (استبدال أو إدراج الدالة التالية)
+// routes/whatsapp.js
+const express = require('express');
 const path = require('path');
+const router = express.Router();
 
 let whatsappInstance = null;
 let isInitializing = false;
@@ -121,4 +123,29 @@ async function initWhatsAppService(options = {}) {
   throw lastErr;
 }
 
-module.exports = { initWhatsAppService, getWhatsAppInstance: () => whatsappInstance };
+function getWhatsAppInstance() {
+  return whatsappInstance;
+}
+
+/*
+  Router endpoints (minimal, non-intrusive)
+  - POST /init   => triggers initWhatsAppService (returns quickly or after initialization)
+  - GET  /status => returns whether instance exists
+*/
+router.post('/init', async (req, res) => {
+  try {
+    await initWhatsAppService();
+    res.json({ ok: true, message: 'WhatsApp init started or already initialized' });
+  } catch (err) {
+    console.error('init endpoint error:', err && err.message ? err.message : err);
+    res.status(500).json({ ok: false, message: err && err.message ? err.message : 'Initialization error' });
+  }
+});
+
+router.get('/status', (req, res) => {
+  const inst = getWhatsAppInstance();
+  res.json({ initialized: !!inst });
+});
+
+// Export router so server.js can mount it safely
+module.exports = router;
