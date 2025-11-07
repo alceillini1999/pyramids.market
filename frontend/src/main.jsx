@@ -1,10 +1,10 @@
 // pyramids-mart/frontend/src/main.jsx
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "./index.css"; // استيراد الـ Tailwind CSS
 import App from "./App.jsx";
 import ErrorBoundary from "./ErrorBoundary.jsx";
 
-// معالجات أخطاء عامة لمنع توقف الريندر بسبب وعود غير معالجة
 window.addEventListener("error", (e) => {
   console.error("Window error:", e.error || e.message || e);
 });
