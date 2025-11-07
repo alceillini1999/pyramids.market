@@ -1,56 +1,66 @@
-import React, { useState, useContext } from "react";
-import { AuthContext } from "../../AuthProvider";
+import React, { useState } from "react";
+import { API_URL } from "../../constants/api";
+import { useNavigate } from "react-router-dom";
 
 export default function LoginPage() {
-  const { login } = useContext(AuthContext);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    login(email, password);
+    try {
+      const res = await fetch(`${API_URL}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        localStorage.setItem("token", data.token);
+        navigate("/overview");
+      } else {
+        alert(data.message || "Login failed");
+      }
+    } catch (err) {
+      alert("Server connection error");
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-yellow-100 via-yellow-200 to-yellow-300 flex items-center justify-center p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full">
-        <h2 className="text-3xl font-bold text-center text-yellow-600 mb-6">Welcome Back</h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-gray-700 text-sm font-medium mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
-            />
-          </div>
-
-          <div>
-            <label className="block text-gray-700 text-sm font-medium mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-4 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-4 rounded-lg shadow"
-          >
-            Sign In
-          </button>
-        </form>
-
-        <p className="text-sm text-center text-gray-500 mt-4">
-          Don't have an account? <a href="/register" className="text-yellow-600 font-medium hover:underline">Register</a>
-        </p>
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white p-8 rounded-xl shadow-md w-full max-w-md space-y-4"
+      >
+        <h2 className="text-2xl font-bold text-yellow-600 text-center">Login</h2>
+        <input
+          type="email"
+          placeholder="Email"
+          className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+        <button
+          type="submit"
+          className="w-full bg-yellow-500 text-white p-3 rounded-lg hover:bg-yellow-600 transition"
+        >
+          Sign In
+        </button>
+      </form>
     </div>
   );
 }

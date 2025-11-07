@@ -1,78 +1,73 @@
-import React, { useEffect, useState, useRef } from 'react'
-import api from '../api/api'
+import React, { useEffect, useState } from "react";
+import { API_URL } from "../constants/api";
 
-export default function ClientsPage(){
-  const [clients, setClients] = useState([])
-  const [search, setSearch] = useState('')
-  const [area, setArea] = useState('')
-  const [loading, setLoading] = useState(false)
-  const fileRef = useRef()
+export default function ClientsPage() {
+  const [clients, setClients] = useState([]);
 
-  async function fetchClients(){
-    setLoading(true)
-    try{
-      const q = new URLSearchParams()
-      if (search) q.set('search', search)
-      if (area) q.set('area', area)
-      const res = await api.get('/clients?' + q.toString())
-      setClients(res.data.data || res.data)
-    }catch(err){
-      console.error(err)
-      alert('فشل جلب العملاء')
-    }finally{ setLoading(false) }
-  }
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_URL}/clients`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const data = await res.json();
+        setClients(data);
+      } catch (err) {
+        console.error("Failed to load clients", err);
+      }
+    };
 
-  useEffect(()=>{ fetchClients() }, [])
-
-  async function handleImport(e){
-    const f = e.target.files[0]
-    if (!f) return
-    const fd = new FormData()
-    fd.append('file', f)
-    try{
-      const res = await api.post('/clients/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-      alert('تم الاستيراد: ' + res.data.created)
-      fetchClients()
-    }catch(err){
-      console.error(err)
-      alert('فشل الاستيراد')
-    } finally {
-      fileRef.current.value = null
-    }
-  }
-
-  function exportCSV(){
-    const url = (import.meta.env.VITE_API_URL || '/api') + '/clients/export/csv'
-    window.open(url, '_blank')
-  }
+    fetchClients();
+  }, []);
 
   return (
-    <div>
-      <h2 className="text-2xl font-semibold mb-4">العملاء — Clients</h2>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <header className="mb-6 flex justify-between items-center">
+        <h1 className="text-3xl font-bold text-yellow-600">Clients</h1>
+        <button className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg shadow">
+          Add Client
+        </button>
+      </header>
 
-      <div className="mb-4 flex gap-2 items-center">
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="بحث بالاسم..." className="p-2 border rounded"/>
-        <input value={area} onChange={e=>setArea(e.target.value)} placeholder="المنطقة..." className="p-2 border rounded"/>
-        <button onClick={fetchClients} className="px-3 py-2 bg-pyramid-gold rounded text-white">بحث</button>
-        <button onClick={exportCSV} className="px-3 py-2 border rounded">تصدير CSV</button>
-        <label className="px-3 py-2 border rounded cursor-pointer">
-          استيراد CSV
-          <input ref={fileRef} type="file" accept=".csv" onChange={handleImport} className="hidden" />
-        </label>
-      </div>
-
-      <div className="bg-white rounded shadow p-4">
-        {loading ? <div>جارٍ التحميل...</div> :
-          <table className="w-full table-auto">
-            <thead><tr className="text-left"><th>الاسم</th><th>الهاتف</th><th>المنطقة</th><th>الوسوم</th></tr></thead>
-            <tbody>
-              {clients && clients.length ? clients.map(c=> (
-                <tr key={c._id || c.id}><td>{c.name}</td><td>{c.phone}</td><td>{c.area}</td><td>{(c.tags||[]).join(', ')}</td></tr>
-              )) : <tr><td colSpan="4">لا يوجد عملاء</td></tr>}
-            </tbody>
-          </table>
-        }
+      <div className="overflow-x-auto rounded-lg shadow">
+        <table className="min-w-full bg-white">
+          <thead>
+            <tr className="bg-yellow-100 text-gray-700">
+              <th className="py-3 px-4 text-left">Name</th>
+              <th className="py-3 px-4 text-left">Phone</th>
+              <th className="py-3 px-4 text-left">Email</th>
+              <th className="py-3 px-4 text-left">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {clients.map((client) => (
+              <tr key={client._id} className="border-b hover:bg-gray-50">
+                <td className="py-3 px-4">{client.name}</td>
+                <td className="py-3 px-4">{client.phone}</td>
+                <td className="py-3 px-4">{client.email}</td>
+                <td className="py-3 px-4 space-x-2">
+                  <button className="text-sm bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
+                    Edit
+                  </button>
+                  <button className="text-sm bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {clients.length === 0 && (
+              <tr>
+                <td colSpan="4" className="text-center py-6 text-gray-500">
+                  No clients found
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
-  )
+  );
 }

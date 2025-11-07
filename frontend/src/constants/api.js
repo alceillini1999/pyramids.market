@@ -1,0 +1,1 @@
+export const API_URL = "https://pyramids-market.onrender.com/api";
