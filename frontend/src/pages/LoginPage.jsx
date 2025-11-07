@@ -1,38 +1,56 @@
-import React, { useState, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { AuthContext } from '../AuthProvider';
+import React, { useState, useContext } from "react";
+import { AuthContext } from "../../AuthProvider";
 
-export default function LoginPage(){
+export default function LoginPage() {
   const { login } = useContext(AuthContext);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-  async function submit(e){
+  const handleSubmit = (e) => {
     e.preventDefault();
-    setLoading(true);
-    try{
-      await login(email, password);
-      navigate('/whatsapp');
-    }catch(err){
-      console.error(err);
-      alert(err.response?.data?.message || 'فشل تسجيل الدخول');
-    }finally{ setLoading(false); }
-  }
+    login(email, password);
+  };
 
   return (
-    <div className="max-w-md mx-auto bg-white p-6 rounded shadow">
-      <h2 className="text-xl font-semibold mb-4">تسجيل الدخول</h2>
-      <form onSubmit={submit} className="space-y-3">
-        <input required value={email} onChange={e=>setEmail(e.target.value)} placeholder="البريد الإلكتروني" className="w-full p-2 border rounded"/>
-        <input required type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="كلمة المرور" className="w-full p-2 border rounded"/>
-        <div className="flex gap-2">
-          <button type="submit" disabled={loading} className="px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded transition">
-  {loading ? 'جارٍ...' : 'دخول'}
-</button>
-        </div>
-      </form>
+    <div className="min-h-screen bg-gradient-to-br from-yellow-100 via-yellow-200 to-yellow-300 flex items-center justify-center p-4">
+      <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full">
+        <h2 className="text-3xl font-bold text-center text-yellow-600 mb-6">Welcome Back</h2>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-gray-700 text-sm font-medium mb-1">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full px-4 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            />
+          </div>
+
+          <div>
+            <label className="block text-gray-700 text-sm font-medium mb-1">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full px-4 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-4 rounded-lg shadow"
+          >
+            Sign In
+          </button>
+        </form>
+
+        <p className="text-sm text-center text-gray-500 mt-4">
+          Don't have an account? <a href="/register" className="text-yellow-600 font-medium hover:underline">Register</a>
+        </p>
+      </div>
     </div>
-  )
+  );
 }
