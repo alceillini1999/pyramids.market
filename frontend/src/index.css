@@ -8,3 +8,14 @@
   --brand-brown: #7a5200;
   --brand-black: #0b0b0b;
 }
+
+/* === Logo size fix === */
+img[src$="logo.png"],
+img[src$="/logo.png"],
+img[src*="logo"] {
+  width: 150px !important;      /* العرض النهائي */
+  height: auto !important;      /* يحافظ على النسبة */
+  object-fit: contain !important;
+  display: inline-block;
+  margin: 0 auto;               /* يوسّطه إذا لزم */
+}
