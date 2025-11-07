@@ -7,6 +7,7 @@ import POSPage from './pages/POSPage'
 import ClientsPage from './pages/ClientsPage'
 import OverviewPage from './pages/OverviewPage'
 import LoginPage from './pages/LoginPage'
+import Register from './pages/Auth/Register'
 import { AuthContext } from './AuthProvider'
 
 export default function App(){
@@ -38,13 +39,17 @@ export default function App(){
               <button onClick={logout} className="px-3 py-1 border rounded">خروج</button>
             </div>
           ) : (
-            <Link to="/login" className="px-3 py-1 border rounded">تسجيل الدخول</Link>
+            <div className="flex gap-3">
+              <Link to="/login" className="px-3 py-1 border rounded">تسجيل الدخول</Link>
+              <Link to="/register" className="px-3 py-1 border rounded">تسجيل</Link>
+            </div>
           )}
         </header>
 
         <Routes>
           <Route path="/" element={<OverviewPage/>}/>
           <Route path="/login" element={<LoginPage/>}/>
+          <Route path="/register" element={<Register/>}/>
           <Route path="/whatsapp" element={<WhatsAppPage/>}/>
           <Route path="/products" element={<ProductsPage/>}/>
           <Route path="/expenses" element={<ExpensesPage/>}/>

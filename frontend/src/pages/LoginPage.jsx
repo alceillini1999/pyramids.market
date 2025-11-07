@@ -28,7 +28,9 @@ export default function LoginPage(){
         <input required value={email} onChange={e=>setEmail(e.target.value)} placeholder="البريد الإلكتروني" className="w-full p-2 border rounded"/>
         <input required type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="كلمة المرور" className="w-full p-2 border rounded"/>
         <div className="flex gap-2">
-          <button type="submit" disabled={loading} className="px-4 py-2 bg-pyramid-brown text-white rounded">{loading ? 'جارٍ...' : 'دخول'}</button>
+          <button type="submit" disabled={loading} className="px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded transition">
+  {loading ? 'جارٍ...' : 'دخول'}
+</button>
         </div>
       </form>
     </div>
