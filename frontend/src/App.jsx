@@ -1,47 +1,41 @@
-import React from 'react'
-import { Routes, Route, Link, Navigate } from 'react-router-dom'
-import WhatsAppPage from './pages/WhatsAppPage'
-import ProductsPage from './pages/ProductsPage'
-import ExpensesPage from './pages/ExpensesPage'
-import POSPage from './pages/POSPage'
-import ClientsPage from './pages/ClientsPage'
-import OverviewPage from './pages/OverviewPage'
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import Layout from "./components/Layout";
 
-export default function App(){
+// الصفحات
+import Dashboard from "./pages/Dashboard";
+import OverviewPage from "./pages/OverviewPage";
+import ProductsPage from "./pages/ProductsPage";
+import ExpensesPage from "./pages/ExpensesPage";
+import POSPage from "./pages/POSPage";
+import ClientsPage from "./pages/ClientsPage";
+import WhatsAppPage from "./pages/WhatsAppPage";
+import LoginPage from "./pages/LoginPage";
+import Register from "./pages/Auth/Register"; // إذا كنت تستخدم صفحة التسجيل
+
+export default function App() {
   return (
-    <div className="min-h-screen flex bg-gradient-to-br from-[rgba(255,250,245,1)] to-white">
-      <aside className="w-64 p-4 border-r bg-white/60 backdrop-blur-sm">
-        <div className="flex items-center gap-3 mb-6">
-          <img src="/logo.png" alt="logo" className="w-12 h-12 object-contain"/>
-          <div>
-            <h1 className="font-bold text-lg text-pyramid-dark">Pyramids Mart</h1>
-            <p className="text-sm text-gray-500">Dashboard</p>
-          </div>
-        </div>
-        <nav className="space-y-2">
-          <Link to="/whatsapp" className="block px-3 py-2 rounded hover:bg-pyramid-yellow/20">WhatsApp</Link>
-          <Link to="/products" className="block px-3 py-2 rounded hover:bg-pyramid-yellow/20">Products</Link>
-          <Link to="/expenses" className="block px-3 py-2 rounded hover:bg-pyramid-yellow/20">Expenses</Link>
-          <Link to="/pos" className="block px-3 py-2 rounded hover:bg-pyramid-yellow/20">POS</Link>
-          <Link to="/clients" className="block px-3 py-2 rounded hover:bg-pyramid-yellow/20">Clients</Link>
-          <Link to="/overview" className="block px-3 py-2 rounded hover:bg-pyramid-yellow/20">Overview (future)</Link>
-        </nav>
-      </aside>
-      <main className="flex-1 p-6">
+    <Router>
+      <Layout>
         <Routes>
-          {/* The overview page doubles as the home page. */}
-          <Route path="/" element={<OverviewPage />} />
-          <Route path="/whatsapp" element={<WhatsAppPage />} />
+          <Route path="/" element={<Navigate to="/overview" replace />} />
+
+          {/* Dashboard / Overview */}
+          <Route path="/overview" element={<Dashboard />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+
+          {/* App pages */}
           <Route path="/products" element={<ProductsPage />} />
           <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/pos" element={<POSPage />} />
           <Route path="/clients" element={<ClientsPage />} />
-          <Route path="/overview" element={<OverviewPage />} />
-          {/* Catch‑all route: if a user navigates to an unknown path
-              (e.g. /something/random), redirect them to the home page. */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="/whatsapp" element={<WhatsAppPage />} />
+
+          {/* Auth */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<Register />} />
         </Routes>
-      </main>
-    </div>
-  )
+      </Layout>
+    </Router>
+  );
 }
