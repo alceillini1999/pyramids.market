@@ -1,72 +1,75 @@
+// src/pages/ExpensesPage.jsx
 import React, { useEffect, useState } from "react";
-import { API_URL } from "../constants/api";
 
-export default function ProductsPage() {
-  const [products, setProducts] = useState([]);
+export default function ExpensesPage() {
+  const [expenses, setExpenses] = useState([]);
 
+  // بيانات تجريبية مؤقتة — استبدل بجلب من API لاحقاً
   useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const res = await fetch(`${API_URL}/products`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        const data = await res.json();
-        setProducts(data);
-      } catch (err) {
-        console.error("Failed to load products", err);
-      }
-    };
-
-    fetchProducts();
+    setExpenses([
+      { _id: "1", description: "Rent", amount: 1200, date: "2025-10-01" },
+      { _id: "2", description: "Utilities", amount: 450, date: "2025-10-05" },
+      { _id: "3", description: "Supplies", amount: 300, date: "2025-10-10" },
+    ]);
   }, []);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <header className="mb-6 flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-yellow-600">Products</h1>
-        <button className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg shadow">
-          Add Product
-        </button>
-      </header>
+      <div className="max-w-6xl mx-auto">
+        <header className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-yellow-600">Expenses</h1>
+            <p className="text-sm text-gray-500">Track your business expenses</p>
+          </div>
 
-      <div className="overflow-x-auto rounded-lg shadow">
-        <table className="min-w-full bg-white">
-          <thead>
-            <tr className="bg-yellow-100 text-gray-700">
-              <th className="py-3 px-4 text-left">Name</th>
-              <th className="py-3 px-4 text-left">Price</th>
-              <th className="py-3 px-4 text-left">Category</th>
-              <th className="py-3 px-4 text-left">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((product) => (
-              <tr key={product._id} className="border-b hover:bg-gray-50">
-                <td className="py-3 px-4">{product.name}</td>
-                <td className="py-3 px-4">${product.price}</td>
-                <td className="py-3 px-4">{product.category}</td>
-                <td className="py-3 px-4 space-x-2">
-                  <button className="text-sm bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
-                    Edit
-                  </button>
-                  <button className="text-sm bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {products.length === 0 && (
+          <div className="flex items-center gap-3">
+            <input
+              type="text"
+              placeholder="Search expenses..."
+              className="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            />
+            <button className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg shadow">
+              Add Expense
+            </button>
+          </div>
+        </header>
+
+        <div className="bg-white rounded-xl shadow overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-yellow-50">
               <tr>
-                <td colSpan="4" className="text-center py-6 text-gray-500">
-                  No products found
-                </td>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Description</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Amount</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Date</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">Actions</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+
+            <tbody className="bg-white divide-y divide-gray-100">
+              {expenses.length === 0 ? (
+                <tr>
+                  <td colSpan="4" className="px-6 py-8 text-center text-gray-500">
+                    No expenses found
+                  </td>
+                </tr>
+              ) : (
+                expenses.map((expense) => (
+                  <tr key={expense._id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{expense.description}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${expense.amount}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      {new Date(expense.date).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                      <button className="text-sm bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 mr-2">Edit</button>
+                      <button className="text-sm bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">Delete</button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

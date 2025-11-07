@@ -1,72 +1,37 @@
-import React, { useEffect, useState } from "react";
-import { API_URL } from "../constants/api";
+// src/pages/ProductsPage.jsx
+import React from "react";
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState([]);
-
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const res = await fetch(`${API_URL}/products`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        const data = await res.json();
-        setProducts(data);
-      } catch (err) {
-        console.error("Failed to load products", err);
-      }
-    };
-
-    fetchProducts();
-  }, []);
-
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <header className="mb-6 flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-yellow-600">Products</h1>
-        <button className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg shadow">
-          Add Product
-        </button>
-      </header>
+    <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
+      <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-4xl">
+        <h1 className="text-3xl font-bold text-yellow-600 mb-6">Products</h1>
 
-      <div className="overflow-x-auto rounded-lg shadow">
-        <table className="min-w-full bg-white">
-          <thead>
-            <tr className="bg-yellow-100 text-gray-700">
-              <th className="py-3 px-4 text-left">Name</th>
-              <th className="py-3 px-4 text-left">Price</th>
-              <th className="py-3 px-4 text-left">Category</th>
-              <th className="py-3 px-4 text-left">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((product) => (
-              <tr key={product._id} className="border-b hover:bg-gray-50">
-                <td className="py-3 px-4">{product.name}</td>
-                <td className="py-3 px-4">${product.price}</td>
-                <td className="py-3 px-4">{product.category}</td>
-                <td className="py-3 px-4 space-x-2">
-                  <button className="text-sm bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
-                    Edit
-                  </button>
-                  <button className="text-sm bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {products.length === 0 && (
-              <tr>
-                <td colSpan="4" className="text-center py-6 text-gray-500">
-                  No products found
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <div className="grid md:grid-cols-3 gap-6">
+          <div className="bg-yellow-50 p-6 rounded-lg shadow-inner hover:shadow-lg transition">
+            <h2 className="text-lg font-semibold text-gray-800">Coffee Beans</h2>
+            <p className="text-gray-600">Stock: 45 units</p>
+            <p className="text-gray-600">Price: $12.99</p>
+          </div>
+
+          <div className="bg-yellow-50 p-6 rounded-lg shadow-inner hover:shadow-lg transition">
+            <h2 className="text-lg font-semibold text-gray-800">Chocolate Bar</h2>
+            <p className="text-gray-600">Stock: 88 units</p>
+            <p className="text-gray-600">Price: $2.50</p>
+          </div>
+
+          <div className="bg-yellow-50 p-6 rounded-lg shadow-inner hover:shadow-lg transition">
+            <h2 className="text-lg font-semibold text-gray-800">Green Tea</h2>
+            <p className="text-gray-600">Stock: 120 units</p>
+            <p className="text-gray-600">Price: $6.75</p>
+          </div>
+        </div>
+
+        <div className="mt-8 text-center">
+          <button className="bg-yellow-500 hover:bg-yellow-600 text-white font-medium px-6 py-2 rounded-lg transition">
+            Add New Product
+          </button>
+        </div>
       </div>
     </div>
   );
