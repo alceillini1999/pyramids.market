@@ -1,11 +1,7 @@
 /* pyramids-mart/frontend/src/index.css */
-
-/* أساسيات Tailwind */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* تخصيصات إضافية (يمكنك تعديلها لاحقًا) */
-body {
-  @apply bg-gray-50 text-gray-900 font-sans;
-}
+/* اختياري */
+body { @apply bg-gray-50 text-gray-900 font-sans; }
