@@ -75,9 +75,7 @@ async function _startWithStrategy(index) {
 
       // في حالة 515: بدّل الاستراتيجية وأعد المحاولة بجلسة جديدة
       if (code === 515) {
-        try {
-          wipeSession();
-        } catch {}
+        try { wipeSession(); } catch {}
         strategyIndex = (strategyIndex + 1) % BROWSERS.length;
         setTimeout(() => start(true), 4000);
       } else {
@@ -88,10 +86,7 @@ async function _startWithStrategy(index) {
 }
 
 async function start(forceFresh = false) {
-  if (forceFresh) {
-    initPromise = null;
-    sock = null;
-  }
+  if (forceFresh) { initPromise = null; sock = null; }
   if (initPromise) return initPromise;
   ensureDir(SESSION_DIR);
 
@@ -139,13 +134,25 @@ async function sendBulk({ to = [], message, mediaUrl }) {
   return results;
 }
 
+// ✅ توليد كود الاقتران (Pairing Code) بديلًا عن QR
+async function requestPairingCode(phoneE164) {
+  await start();
+  if (!sock || !sock.requestPairingCode) {
+    throw new Error('Pairing code not supported by this Baileys version');
+  }
+  // phoneE164: بصيغة دولية مثل 2547xxxxxxx بدون رمز +
+  const normalized = String(phoneE164).replace(/\D/g, '');
+  if (!normalized) throw new Error('Invalid phone number');
+  const code = await sock.requestPairingCode(normalized);
+  return code; // مثال: "123-456"
+}
+
 async function resetSession() {
   wipeSession();
   initPromise = null;
   sock = null;
   qrString = null;
   connected = false;
-  // نعيد التشغيل مع نفس الإستراتيجية الحالية
   await start(true);
 }
 
@@ -155,6 +162,8 @@ module.exports = {
   getStatus,
   getQrDataUrl,
   sendBulk,
+  requestPairingCode,         // <-- جديد
   resetSession,
   SESSION_DIR,
 };
+
