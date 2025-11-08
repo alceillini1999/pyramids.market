@@ -54,8 +54,6 @@ async function _startWithStrategy(index) {
     connectTimeoutMs: 45_000,
     defaultQueryTimeoutMs: 60_000,
     markOnlineOnConnect: false,
-    // لا نمرر legacy لتوافق جميع الإصدارات
-    // syncFullHistory: false, // (افتراضيًا false في كثير من الإصدارات)
   });
 
   sock.ev.on('creds.update', saveCreds);
