@@ -6,7 +6,7 @@ const axios = require('axios');
 const {
   default: makeWASocket,
   useMultiFileAuthState,
-  fetchLatestBaileysVersion,
+  fetchLatestBaileysVersion
 } = require('@whiskeysockets/baileys');
 
 let sock = null;
@@ -14,6 +14,16 @@ let qrString = null;
 let connected = false;
 let initPromise = null;
 
+// تدوير إستراتيجيات الهوية (user-agent) لتجاوز 515
+const BROWSERS = [
+  ['Ubuntu', 'Chrome',  '122.0.0'],
+  ['Ubuntu', 'Edge',    '120.0.0'],
+  ['Ubuntu', 'Firefox', '119.0.1'],
+];
+
+let strategyIndex = 0;
+
+// مسار حفظ الجلسة
 const SESSION_DIR =
   process.env.WHATSAPP_SESSION_PATH ||
   path.join(__dirname, '../../..', 'whatsapp-session');
@@ -22,46 +32,73 @@ function ensureDir(p) {
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
 }
 
-async function start() {
+function wipeSession() {
+  try {
+    if (fs.existsSync(SESSION_DIR)) {
+      fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+    }
+  } catch {}
+}
+
+async function _startWithStrategy(index) {
+  const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
+  const { version } = await fetchLatestBaileysVersion();
+
+  const browserTuple = BROWSERS[index % BROWSERS.length];
+
+  sock = makeWASocket({
+    version,
+    printQRInTerminal: false,
+    auth: state,
+    browser: browserTuple,
+    connectTimeoutMs: 45_000,
+    defaultQueryTimeoutMs: 60_000,
+    markOnlineOnConnect: false,
+    // لا نمرر legacy لتوافق جميع الإصدارات
+    // syncFullHistory: false, // (افتراضيًا false في كثير من الإصدارات)
+  });
+
+  sock.ev.on('creds.update', saveCreds);
+
+  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+    if (qr) {
+      qrString = qr;
+      connected = false;
+    }
+    if (connection === 'open') {
+      connected = true;
+      qrString = null;
+      console.log('✅ WhatsApp connected with browser:', browserTuple.join(' / '));
+    } else if (connection === 'close') {
+      const code = lastDisconnect?.error?.output?.statusCode;
+      connected = false;
+      qrString = null;
+      console.log('❌ WhatsApp closed', code, 'on browser', browserTuple.join(' / '));
+
+      // في حالة 515: بدّل الاستراتيجية وأعد المحاولة بجلسة جديدة
+      if (code === 515) {
+        try {
+          wipeSession();
+        } catch {}
+        strategyIndex = (strategyIndex + 1) % BROWSERS.length;
+        setTimeout(() => start(true), 4000);
+      } else {
+        setTimeout(() => start(false), 5000);
+      }
+    }
+  });
+}
+
+async function start(forceFresh = false) {
+  if (forceFresh) {
+    initPromise = null;
+    sock = null;
+  }
   if (initPromise) return initPromise;
   ensureDir(SESSION_DIR);
 
   initPromise = (async () => {
-    const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
-    const { version } = await fetchLatestBaileysVersion();
-
-    // تهيئة مبسطة ومتوافقة مع أغلب إصدارات Baileys
-    sock = makeWASocket({
-      version,
-      printQRInTerminal: false,
-      auth: state, // لا نستخدم makeCacheableSignalKeyStore لضمان التوافق
-      browser: ['Ubuntu', 'Chrome', '122.0.0'], // هوية متصفح واقعية
-      connectTimeoutMs: 45_000,
-      defaultQueryTimeoutMs: 60_000,
-      markOnlineOnConnect: false,
-      // ملاحظة: بعض الإصدارات لا تدعم legacy، لذا لا نمررها لتجنب الأخطاء
-    });
-
-    sock.ev.on('creds.update', saveCreds);
-
-    sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
-      if (qr) {
-        qrString = qr;
-        connected = false;
-      }
-      if (connection === 'open') {
-        connected = true;
-        qrString = null;
-        console.log('✅ WhatsApp connected');
-      } else if (connection === 'close') {
-        connected = false;
-        qrString = null;
-        const code = lastDisconnect?.error?.output?.statusCode;
-        console.log('❌ WhatsApp closed', code);
-        // إعادة المحاولة تلقائيًا
-        setTimeout(() => start(), 5000);
-      }
-    });
+    await _startWithStrategy(strategyIndex);
   })();
 
   return initPromise;
@@ -69,7 +106,7 @@ async function start() {
 
 async function getStatus() {
   await start();
-  return { connected, hasQR: !!qrString };
+  return { connected, hasQR: !!qrString, strategy: BROWSERS[strategyIndex] };
 }
 
 async function getQrDataUrl() {
@@ -78,6 +115,7 @@ async function getQrDataUrl() {
   return await QRCode.toDataURL(qrString);
 }
 
+// إرسال جماعي (نص/صورة)
 async function sendBulk({ to = [], message, mediaUrl }) {
   await start();
   if (!connected) throw new Error('WhatsApp not connected');
@@ -104,21 +142,18 @@ async function sendBulk({ to = [], message, mediaUrl }) {
 }
 
 async function resetSession() {
-  try {
-    if (fs.existsSync(SESSION_DIR)) {
-      fs.rmSync(SESSION_DIR, { recursive: true, force: true });
-    }
-  } catch {}
+  wipeSession();
   initPromise = null;
   sock = null;
   qrString = null;
   connected = false;
-  await start();
+  // نعيد التشغيل مع نفس الإستراتيجية الحالية
+  await start(true);
 }
 
 module.exports = {
   start,
-  init: start, // alias لتوافق نداءات قديمة
+  init: start,                // alias للتوافق
   getStatus,
   getQrDataUrl,
   sendBulk,
