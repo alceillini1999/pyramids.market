@@ -7,8 +7,6 @@ const {
   default: makeWASocket,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
-  makeCacheableSignalKeyStore,
-  makeInMemoryStore,
 } = require('@whiskeysockets/baileys');
 
 let sock = null;
@@ -31,26 +29,21 @@ async function start() {
   initPromise = (async () => {
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
     const { version } = await fetchLatestBaileysVersion();
-    const store = makeInMemoryStore({});
 
+    // تهيئة مبسطة ومتوافقة مع أغلب إصدارات Baileys
     sock = makeWASocket({
       version,
       printQRInTerminal: false,
-      auth: {
-        creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, console),
-      },
-      browser: ['Ubuntu', 'Chrome', '22.04.4'], // realistic browser identity
+      auth: state, // لا نستخدم makeCacheableSignalKeyStore لضمان التوافق
+      browser: ['Ubuntu', 'Chrome', '122.0.0'], // هوية متصفح واقعية
       connectTimeoutMs: 45_000,
       defaultQueryTimeoutMs: 60_000,
       markOnlineOnConnect: false,
-      syncFullHistory: false,
-      emitOwnEvents: false,
-      generateHighQualityLinkPreview: true,
-      legacy: true, // ✅ forces legacy multi-device mode (fix for code 515)
+      // ملاحظة: بعض الإصدارات لا تدعم legacy، لذا لا نمررها لتجنب الأخطاء
     });
 
     sock.ev.on('creds.update', saveCreds);
+
     sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
       if (qr) {
         qrString = qr;
@@ -65,11 +58,10 @@ async function start() {
         qrString = null;
         const code = lastDisconnect?.error?.output?.statusCode;
         console.log('❌ WhatsApp closed', code);
+        // إعادة المحاولة تلقائيًا
         setTimeout(() => start(), 5000);
       }
     });
-
-    store.bind(sock.ev);
   })();
 
   return initPromise;
@@ -126,7 +118,7 @@ async function resetSession() {
 
 module.exports = {
   start,
-  init: start,
+  init: start, // alias لتوافق نداءات قديمة
   getStatus,
   getQrDataUrl,
   sendBulk,
