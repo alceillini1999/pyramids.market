@@ -14,7 +14,7 @@ let qrString = null;
 let connected = false;
 let initPromise = null;
 
-// مسار حفظ الجلسة (يبقى بين إعادة التشغيل، لكنه يُمسح عند نشر نسخة جديدة)
+// حفظ الجلسة على القرص
 const SESSION_DIR =
   process.env.WHATSAPP_SESSION_PATH ||
   path.join(__dirname, '../../..', 'whatsapp-session');
@@ -109,8 +109,10 @@ async function resetSession() {
   await start();
 }
 
+// <-- النقطة المهمة: نُصدّر alias باسم init ليتوافق مع server.js
 module.exports = {
   start,
+  init: start,           // ✅ alias لإصلاح الخطأ
   getStatus,
   getQrDataUrl,
   sendBulk,
