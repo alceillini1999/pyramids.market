@@ -68,4 +68,29 @@ router.get('/debug-session-path', (_req, res) => {
   res.json({ path: wa.SESSION_DIR });
 });
 
+// --------- Pairing code ----------
+router.post('/pairing-code', async (req, res) => {
+  try {
+    const { phone } = req.body || {};
+
+    if (!phone) {
+      return res.status(400).json({ ok: false, error: 'يجب إرسال رقم الهاتف (phone)' });
+    }
+
+    // منطق مؤقت لتوليد كود تجريبي
+    const fakeCode = 'ABC123';
+
+    res.json({
+      ok: true,
+      phone,
+      code: fakeCode,
+      message: 'تم إنشاء كود الاقتران بنجاح'
+    });
+
+  } catch (e) {
+    console.error('pairing-code error:', e);
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
 module.exports = router;
