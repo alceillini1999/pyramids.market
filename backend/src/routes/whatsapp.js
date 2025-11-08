@@ -1,7 +1,6 @@
-// backend/src/routes/whatsapp.js
 const express = require('express');
 const router = express.Router();
-const wa = require('../services/whatsapp');
+const wa = require('../services/whatsappService');
 
 router.post('/init', async (_req, res) => {
   try { await wa.start(); res.json({ ok: true }); }
