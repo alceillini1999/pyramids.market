@@ -5,9 +5,8 @@ const {
   default: makeWASocket,
   fetchLatestBaileysVersion,
   Browsers,
-  jidNormalizedUser,
+  jidNormalizedUser
 } = require('@whiskeysockets/baileys');
-
 const { useMongoAuthState, clearAuth } = require('./mongoAuthState');
 
 let sock = null;
@@ -15,11 +14,11 @@ let qrString = null;
 let connected = false;
 let initPromise = null;
 
-// استراتيجيات "متصفح" مختلفة لتجاوز كود 515 أحيانًا
+// المتصفحات البديلة لتفادي الخطأ 515
 const BROWSERS = [
-  ['Ubuntu', 'Chrome',  '122.0.0'],
-  ['Ubuntu', 'Edge',    '120.0.0'],
-  ['Ubuntu', 'Firefox', '119.0.1'],
+  ['Ubuntu', 'Chrome', '122.0.0'],
+  ['Ubuntu', 'Edge', '120.0.0'],
+  ['Ubuntu', 'Firefox', '119.0.1']
 ];
 let strategyIndex = 0;
 
@@ -29,42 +28,53 @@ async function _startWithStrategy(index) {
   const { version } = await fetchLatestBaileysVersion();
 
   const browserTuple = BROWSERS[index % BROWSERS.length];
+  console.log('🚀 Initializing WhatsApp connection with browser:', browserTuple.join(' / '));
 
-  // ✅ تفعيل طباعة رمز الـ QR مباشرة داخل الـ Logs في Render
   const instance = makeWASocket({
     version,
     auth: state,
-    printQRInTerminal: true, // ← هذا هو التغيير المهم
     browser: Browsers.appropriate(browserTuple.join(' / ')),
-    syncFullHistory: false
+    syncFullHistory: false,
   });
 
-  // حفظ أي تحديث على الاعتمادات (creds)
+  // حفظ التحديثات على بيانات الجلسة
   instance.ev.on('creds.update', async (newCreds) => {
     _replaceCredsRef(newCreds);
     await saveCreds();
   });
 
-  // متابعة حالة الاتصال
-  instance.ev.on('connection.update', (u) => {
-    const { connection, lastDisconnect, qr } = u;
-    if (qr) { qrString = qr; connected = false; }
+  // ✅ التعامل مع QR عبر الحدث الرسمي
+  instance.ev.on('connection.update', async (update) => {
+    const { connection, qr, lastDisconnect } = update;
+
+    if (qr) {
+      qrString = qr;
+      connected = false;
+      console.log('\n🟢 New WhatsApp QR generated — scan it quickly:\n');
+      QRCode.toString(qr, { type: 'terminal', small: true }, (err, url) => {
+        if (!err) console.log(url);
+      });
+    }
+
     if (connection === 'open') {
-      connected = true; qrString = null;
-      console.log('✅ WhatsApp connected with browser:', browserTuple.join(' / '));
+      connected = true;
+      qrString = null;
+      console.log('✅ WhatsApp connected successfully!');
     } else if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
-      connected = false; qrString = null;
-      console.log('❌ WhatsApp closed', code, 'on browser', browserTuple.join(' / '));
+      connected = false;
+      qrString = null;
+      console.log('❌ WhatsApp closed with code', code);
 
-      const shouldReconnect = code !== 401; // 401 ~ loggedOut
       if (code === 515) {
         strategyIndex = (strategyIndex + 1) % BROWSERS.length;
+        console.log('🔁 Retrying with next browser strategy...');
         setTimeout(() => start(true), 4000);
-      } else if (shouldReconnect) {
+      } else if (code !== 401) {
         setTimeout(() => start(false), 5000);
       } else {
-        clearAuth().catch(() => {});
+        console.log('🧹 Session expired, clearing...');
+        await clearAuth();
       }
     }
   });
@@ -73,7 +83,10 @@ async function _startWithStrategy(index) {
 }
 
 async function start(forceFresh = false) {
-  if (forceFresh) { initPromise = null; sock = null; }
+  if (forceFresh) {
+    initPromise = null;
+    sock = null;
+  }
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
@@ -129,7 +142,6 @@ async function sendBulk({ to = [], message = '', mediaUrl = '' }) {
   return results;
 }
 
-// كود اقتران بديل للـ QR (يدعم حسابات معيّنة فقط)
 async function requestPairingCode(phoneE164) {
   await start();
   if (!sock || !sock.requestPairingCode) {
