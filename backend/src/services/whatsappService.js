@@ -30,20 +30,22 @@ async function _startWithStrategy(index) {
 
   const browserTuple = BROWSERS[index % BROWSERS.length];
 
+  // ✅ تفعيل طباعة رمز الـ QR مباشرة داخل الـ Logs في Render
   const instance = makeWASocket({
     version,
     auth: state,
-    printQRInTerminal: false,
+    printQRInTerminal: true, // ← هذا هو التغيير المهم
     browser: Browsers.appropriate(browserTuple.join(' / ')),
     syncFullHistory: false
   });
 
-  // حفظ أي تحديث على الاعتمادات
+  // حفظ أي تحديث على الاعتمادات (creds)
   instance.ev.on('creds.update', async (newCreds) => {
     _replaceCredsRef(newCreds);
     await saveCreds();
   });
 
+  // متابعة حالة الاتصال
   instance.ev.on('connection.update', (u) => {
     const { connection, lastDisconnect, qr } = u;
     if (qr) { qrString = qr; connected = false; }
@@ -55,16 +57,13 @@ async function _startWithStrategy(index) {
       connected = false; qrString = null;
       console.log('❌ WhatsApp closed', code, 'on browser', browserTuple.join(' / '));
 
-      const shouldReconnect =
-        code !== 401; // 401 ~ loggedOut في أغلب الحالات
+      const shouldReconnect = code !== 401; // 401 ~ loggedOut
       if (code === 515) {
-        // بدّل الاستراتيجية
         strategyIndex = (strategyIndex + 1) % BROWSERS.length;
         setTimeout(() => start(true), 4000);
       } else if (shouldReconnect) {
         setTimeout(() => start(false), 5000);
       } else {
-        // logged out => امسح الجلسة من DB لبدء ربط جديد
         clearAuth().catch(() => {});
       }
     }
@@ -82,7 +81,6 @@ async function start(forceFresh = false) {
       sock = await _startWithStrategy(strategyIndex);
     } catch (e) {
       console.error('Start error:', e);
-      // جرّب استراتيجية أخرى
       strategyIndex = (strategyIndex + 1) % BROWSERS.length;
       sock = await _startWithStrategy(strategyIndex);
     }
@@ -104,9 +102,7 @@ async function getQrDataUrl() {
 function normalizeMsisdn(raw) {
   const r = String(raw || '').replace(/[^\d]/g, '');
   if (!r) return null;
-  // لو بدأ بـ 00 حوّل إلى دولي بدون +
   if (r.startsWith('00')) return r.slice(2);
-  // لو بدأ بـ 0 وليس لديك كود دولة، يُفضّل تمرير دوليًا من المصدر
   return r;
 }
 
@@ -139,7 +135,6 @@ async function requestPairingCode(phoneE164) {
   if (!sock || !sock.requestPairingCode) {
     throw new Error('Pairing code not supported by this Baileys version/account');
   }
-  // phoneE164: بصيغة دولية بدون +
   const p = String(phoneE164 || '').replace(/[^\d]/g, '');
   if (!p) throw new Error('Invalid phone');
   const code = await sock.requestPairingCode(p);
@@ -162,6 +157,5 @@ module.exports = {
   sendBulk,
   requestPairingCode,
   resetSession,
-  // لأغراض التوافق مع /debug-session-path
   SESSION_DIR: 'MONGODB'
 };
