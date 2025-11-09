@@ -7,12 +7,18 @@ import { loadClients, saveClients } from '../lib/store'
 import { readExcelRows, mapRowByAliases, exportRowsToExcel } from "../lib/excel"
 
 const CLIENT_ALIASES = {
-  id: ["id", "clientid", "key"],
+  id: ["id", "clientid", "key", "ID"],
   name: ["name", "client", "customer", "client name"],
-  phone: ["phone", "mobile", "msisdn", "tel"],
-  orders: ["orders", "ordercount", "total orders"],
-  lastOrder: ["lastorder", "last order", "lastorderdate"],
-  points: ["points", "loyalty", "score"],
+  phone: ["phone", "mobile", "msisdn", "tel", "Phone"],
+  orders: ["orders", "ordercount", "total orders", "Orders"],
+  lastOrder: ["lastorder", "last order", "lastorderdate", "Last Order"],
+  points: ["points", "loyalty", "score", "Points"],
+}
+
+// Normalize phone for matching: keep digits only to avoid Excel removing '+' or spaces
+function normPhone(p){
+  const digits = String(p ?? "").replace(/[^0-9]/g, "");
+  return digits; // e.g., "+254 700 000 001" -> "254700000001"
 }
 
 export default function ClientsPage() {
@@ -45,7 +51,15 @@ export default function ClientsPage() {
     saveClients(next)
   }
 
-  const exportExcel = () => exportRowsToExcel(filtered, columns, "clients.xlsx")
+  // Export now includes a stable ID column to preserve identifiers during round-trip
+  const exportExcel = () => exportRowsToExcel(filtered, [
+    { key:'id', title:'ID' },
+    { key:'name', title:'Name' },
+    { key:'phone', title:'Phone' },
+    { key:'orders', title:'Orders' },
+    { key:'lastOrder', title:'Last Order' },
+    { key:'points', title:'Points' },
+  ], "clients.xlsx")
 
   async function onImportExcel(e){
     const f = e.target.files?.[0]
@@ -60,15 +74,15 @@ export default function ClientsPage() {
         lastOrder: String(r.lastOrder || ""),
         points: Number(r.points || 0),
       }))
-      // Merge by phone if present, else by id
+      // Merge by normalized phone if present; else by id (string compare)
       setRows(prev => {
         const byKey = Object.create(null)
         for (const p of prev) {
-          const key = (p.phone && p.phone.trim()) ? ("phone:" + p.phone.trim()) : ("id:" + (p.id || ""))
+          const key = normPhone(p.phone) || ("id:" + String(p.id || ""))
           byKey[key] = p
         }
         for (const n of norm) {
-          const k = (n.phone && n.phone.trim()) ? ("phone:" + n.phone.trim()) : ("id:" + (n.id || ""))
+          const k = normPhone(n.phone) || ("id:" + String(n.id || ""))
           byKey[k] = { ...(byKey[k] || {}), ...n }
         }
         const next = Object.values(byKey)
