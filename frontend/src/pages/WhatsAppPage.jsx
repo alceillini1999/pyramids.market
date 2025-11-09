@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent } from "../../components/ui/card";
 
 export default function WhatsAppPage() {
   const [clients, setClients] = useState([
@@ -16,7 +16,8 @@ export default function WhatsAppPage() {
   const [qrImage, setQrImage] = useState(null);
   const [loadingQR, setLoadingQR] = useState(false);
 
-  const apiBase = import.meta.env.VITE_WA_WEB_BASE || "https://pyramids-market.onrender.com";
+  const apiBase =
+    import.meta.env.VITE_WA_WEB_BASE || "https://pyramids-market.onrender.com";
 
   const handleSelectClient = (phone) => {
     setSelectedClients((prev) =>
@@ -50,10 +51,8 @@ export default function WhatsAppPage() {
     setLoadingQR(true);
     setQrImage(null);
 
-    // 1️⃣ Initialize connection
     await fetch(`${apiBase}/api/whatsapp/init`);
 
-    // 2️⃣ Fetch QR image
     const qrRes = await fetch(`${apiBase}/api/whatsapp/qr-image`);
     if (qrRes.ok) {
       const blob = await qrRes.blob();
