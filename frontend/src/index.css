@@ -28,3 +28,79 @@ body {
 .card-title { @apply text-sm font-medium text-mute; }
 .card-value { @apply text-2xl font-semibold text-ink; }
 .link { @apply text-cocoa hover:opacity-80 underline-offset-4 hover:underline; }
+
+/* --------- فوتر أنيميشن ذهبي --------- */
+:root{
+  --gold-1:#D4AF37;
+  --gold-2:#F4C95D;
+  --gold-3:#8C6A1B;
+}
+
+.pm-footer{
+  position: sticky;
+  bottom: 0;
+  width: 100%;
+  z-index: 30;
+  background: rgba(10, 25, 49, 0.25);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #EDEDED;
+}
+
+.pm-footer-inner{
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 12px 20px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.pm-line{
+  flex: 1 1 auto;
+  height: 3px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--gold-2) 25%,
+    var(--gold-1) 45%,
+    var(--gold-2) 65%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: pm-shimmer 3.2s linear infinite;
+  box-shadow:
+    0 0 8px rgba(212,175,55,.45),
+    0 0 18px rgba(244,201,93,.25);
+}
+
+@keyframes pm-shimmer{
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.pm-brand{
+  font-size: 13px;
+  letter-spacing: .2px;
+  color: #F7F7F7;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.pm-brand::before, .pm-brand::after{
+  content:"";
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, var(--gold-2), var(--gold-1) 60%, var(--gold-3) 100%);
+  box-shadow: 0 0 10px rgba(212,175,55,.75);
+}
+
+.pm-line.thin{
+  height: 2px; opacity: .55;
+  animation-duration: 5.5s;
+  margin-top: 6px;
+}
