@@ -11,24 +11,30 @@ import POSPage from './pages/POSPage'
 import ClientsPage from './pages/ClientsPage'
 import SalesPage from './pages/SalesPage'
 
+/* ▼▼ الجديد ▼▼ */
+import AppBackground from './ui/theme/AppBackground'
+import './styles/pyramids-theme.css'
+/* ▲▲ الجديد ▲▲ */
+
 export default function App() {
   return (
     <BrowserRouter>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Navigate to="/overview" replace />} />
-          <Route path="/overview" element={<OverviewPage />} />
-          <Route path="/whatsapp" element={<WhatsAppPage />} />
-          <Route path="/products" element={<ProductsPage />} />
-          <Route path="/expenses" element={<ExpensesPage />} />
-          <Route path="/pos" element={<POSPage />} />
-          {/* ✅ هنا كان العكس: أصلحنا التبديل */}
-          <Route path="/clients" element={<ClientsPage />} />
-          <Route path="/sales" element={<SalesPage />} />
-          {/* 404 بسيطة */}
-          <Route path="*" element={<div className="p-6 text-mute">Not Found</div>} />
-        </Routes>
-      </Layout>
+      {/* نلفّ كل الـ Layout بالخلفية المتحركة — لا نضيف شريط جديد */}
+      <AppBackground>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Navigate to="/overview" replace />} />
+            <Route path="/overview" element={<OverviewPage />} />
+            <Route path="/whatsapp" element={<WhatsAppPage />} />
+            <Route path="/products" element={<ProductsPage />} />
+            <Route path="/expenses" element={<ExpensesPage />} />
+            <Route path="/pos" element={<POSPage />} />
+            <Route path="/clients" element={<ClientsPage />} />
+            <Route path="/sales" element={<SalesPage />} />
+            <Route path="*" element={<div className="p-6 text-mute">Not Found</div>} />
+          </Routes>
+        </Layout>
+      </AppBackground>
     </BrowserRouter>
   )
 }
