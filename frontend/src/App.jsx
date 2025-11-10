@@ -24,14 +24,52 @@ function RoutedPages() {
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<Navigate to="/overview" replace />} />
-        <Route path="/overview" element={<PageWrapper><OverviewPage /></PageWrapper>} />
-        <Route path="/whatsapp" element={<PageWrapper><WhatsAppPage /></PageWrapper>} />
-        <Route path="/products" element={<PageWrapper><ProductsPage /></PageWrapper>} />
-        <Route path="/expenses" element={<PageWrapper><ExpensesPage /></PageWrapper>} />
-        <Route path="/pos" element={<PageWrapper><POSPage /></PageWrapper>} />
-        <Route path="/clients" element={<PageWrapper><ClientsPage /></PageWrapper>} />
-        <Route path="/sales" element={<PageWrapper><SalesPage /></PageWrapper>} />
-        <Route path="*" element={<PageWrapper><div className="p-6 text-mute">Not Found</div></PageWrapper>} />
+        <Route
+          path="/overview"
+          element={<PageWrapper><OverviewPage /></PageWrapper>}
+        />
+        <Route
+          path="/whatsapp"
+          element={
+            <PageWrapper>
+              {/* غلاف زجاجي عام لهذه الصفحة */}
+              <div className="page-surface whatsapp-page">
+                <WhatsAppPage />
+              </div>
+            </PageWrapper>
+          }
+        />
+        <Route
+          path="/products"
+          element={<PageWrapper><ProductsPage /></PageWrapper>}
+        />
+        <Route
+          path="/expenses"
+          element={<PageWrapper><ExpensesPage /></PageWrapper>}
+        />
+        <Route
+          path="/pos"
+          element={<PageWrapper><POSPage /></PageWrapper>}
+        />
+        <Route
+          path="/clients"
+          element={
+            <PageWrapper>
+              {/* غلاف زجاجي عام لهذه الصفحة */}
+              <div className="page-surface clients-page">
+                <ClientsPage />
+              </div>
+            </PageWrapper>
+          }
+        />
+        <Route
+          path="/sales"
+          element={<PageWrapper><SalesPage /></PageWrapper>}
+        />
+        <Route
+          path="*"
+          element={<PageWrapper><div className="p-6 text-mute">Not Found</div></PageWrapper>}
+        />
       </Routes>
     </AnimatePresence>
   )
