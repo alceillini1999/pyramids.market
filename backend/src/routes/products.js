@@ -68,6 +68,16 @@ router.post('/import/excel', async (req, res) => {
       const barcode = String(r.barcode || '').trim();
       if (!name && !barcode) continue;
 
+      // ——— expiry: date-only (00:00:00 UTC) ———
+      let expiry = null;
+      if (r.expiry) {
+        const parsed = new Date(String(r.expiry));
+        if (!isNaN(parsed.getTime())) {
+          parsed.setUTCHours(0, 0, 0, 0);
+          expiry = parsed;
+        }
+      }
+
       const update = {
         name,
         barcode: barcode || undefined,
@@ -75,7 +85,7 @@ router.post('/import/excel', async (req, res) => {
         costPrice: num(r.cost ?? r.costPrice, 0),
         quantity: num(r.quantity ?? r.qty ?? r.stock, 0),
         category: r.category || '',
-        expiry: r.expiry ? new Date(String(r.expiry)) : null,
+        expiry,
         updatedAt: new Date(),
       };
 
@@ -117,21 +127,23 @@ router.post('/sync/google-csv', async (req, res) => {
       const qty = m['quantity'] || m['qty'] || m['stock'];
       const category = m['category'] || m['cat'];
 
-      // ===== Expiry: يدعم DD/MM/YYYY أو DD-MM-YYYY ويُرجع Date أو null
+      // ===== Expiry: يدعم DD/MM/YYYY أو DD-MM-YYYY ويُخزَّن كتاريخ فقط (00:00:00 UTC)
       let expiryRaw = m['expiry'] || m['expirydate'] || m['exp'] || '';
       let expiry = null;
       if (expiryRaw) {
-        // وحّد الفاصل إلى '/'
-        let s = String(expiryRaw).trim().replace(/-/g, '/');
+        let s = String(expiryRaw).trim().replace(/-/g, '/'); // وحّد الفاصل
         const parts = s.split('/');
+        let parsed = null;
         if (parts.length === 3) {
           const [d, mth, y] = parts;
           const iso = `${y}-${String(mth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-          const parsed = new Date(iso);
-          if (!isNaN(parsed.getTime())) expiry = parsed;
+          parsed = new Date(iso);
         } else {
-          const parsed = new Date(s);
-          if (!isNaN(parsed.getTime())) expiry = parsed;
+          parsed = new Date(s);
+        }
+        if (!isNaN(parsed?.getTime())) {
+          parsed.setUTCHours(0, 0, 0, 0); // <-- إزالة الوقت
+          expiry = parsed;
         }
       }
 
@@ -146,7 +158,7 @@ router.post('/sync/google-csv', async (req, res) => {
         costPrice: num(cost, 0),
         quantity: num(qty, 0),
         category: category || '',
-        expiry, // لا نعيد تحويله لاحقًا
+        expiry, // تاريخ فقط
       };
     };
 
