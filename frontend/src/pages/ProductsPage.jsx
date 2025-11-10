@@ -3,39 +3,16 @@ import Section from '../components/Section'
 import Table from '../components/Table'
 import ActionMenu from '../components/ActionMenu'
 import Modal from '../components/Modal'
-import { readExcelRows, exportRowsToExcel } from "../lib/excel"
+import { readExcelRows } from "../lib/excel"
 
-// ===== API base (إزالة /api المكرر) =====
-const API_ORIG = (import.meta.env.VITE_API_URL || "").replace(/\/+$/,"")
-const API_BASE = API_ORIG.replace(/\/api$/,"")
+const API_ORIG = (import.meta.env.VITE_API_URL || "").replace(/\+$/,"");
+const API_BASE = API_ORIG.replace(/\/api$/,"");
 const url = (p) => `${API_BASE}${p.startsWith('/') ? p : `/${p}`}`
 
-// ===== أدوات عامة =====
-const getPath = (obj, path) => {
-  if (!obj) return undefined
-  if (path.includes('.')) return path.split('.').reduce((a,k)=> (a==null?a:a[k]), obj)
-  return obj[path]
-}
-const pickNumberFromPaths = (obj, paths) => {
-  for (const p of paths) {
-    const v = getPath(obj, p)
-    if (v !== undefined && v !== null && String(v).trim() !== '') {
-      const n = Number(v)
-      if (!Number.isNaN(n)) return n
-    }
-  }
-  return null
-}
 const fmtMoney = (n) => {
-  if (n === null) return '—'
-  try { return new Intl.NumberFormat('en-KE',{style:'currency',currency:'KES',maximumFractionDigits:2}).format(n) }
+  try { return new Intl.NumberFormat('en-KE',{style:'currency',currency:'KES',maximumFractionDigits:2}).format(Number(n||0)) }
   catch { const x = Number(n); return isNaN(x) ? '—' : `KSh ${x.toFixed(2)}` }
 }
-
-// ===== صفحات محتملة لكل قيمة =====
-const SALE_PATHS = ['salePrice','price','sellingPrice','unitPrice','pricing.sale','price.sale']
-const COST_PATHS = ['cost','costPrice','purchasePrice','buyPrice','pricing.cost','price.cost']
-const QTY_PATHS  = ['quantity','qty','stock','inventory.qty','inventory.quantity']
 
 export default function ProductsPage(){
   const [rows,setRows] = useState([])
@@ -43,101 +20,67 @@ export default function ProductsPage(){
   const [modal,setModal] = useState({open:false, edit:null})
   const fileRef = useRef(null)
 
-  useEffect(()=>{
-    (async ()=>{
-      try{
-        const r = await fetch(url('/api/products'))
-        const d = await r.json()
-        setRows(Array.isArray(d) ? d : [])
-      }catch(e){ console.error(e) }
-    })()
-  },[])
+  async function load(){
+    const r = await fetch(url('/api/products'))
+    const d = await r.json()
+    setRows(Array.isArray(d) ? d : [])
+  }
+  useEffect(()=>{ load().catch(console.error) },[])
 
   const filtered = useMemo(()=>{
     const s = q.trim().toLowerCase()
     return rows.filter(p =>
-      (getPath(p,'name') || '').toLowerCase().includes(s) ||
-      String(getPath(p,'barcode') || getPath(p,'sku') || '').includes(s) ||
-      (getPath(p,'category') || '').toLowerCase().includes(s)
+      String(p.name||'').toLowerCase().includes(s) ||
+      String(p.barcode||p.sku||'').includes(s) ||
+      String(p.category||'').toLowerCase().includes(s)
     )
   },[rows,q])
 
-  const Availability = ({qty})=>{
-    const n = Number(qty||0)
-    const color = n === 0 ? 'bg-red-500' : n < 10 ? 'bg-yellow-500' : n > 20 ? 'bg-green-500' : 'bg-yellow-500'
-    return <span className={`inline-block w-3 h-3 rounded-full ${color}`} title={String(n)} />
-  }
-
   const columns = [
-    { key:'name', title:'Name', render:r=> getPath(r,'name') || '—' },
-    { key:'barcode', title:'Barcode', render:r=> getPath(r,'barcode') || getPath(r,'sku') || '—' },
-    { key:'sale', title:'Sale Price', render:r=> fmtMoney(pickNumberFromPaths(r, SALE_PATHS)) },
-    { key:'cost', title:'Cost',       render:r=> fmtMoney(pickNumberFromPaths(r, COST_PATHS)) },
-    { key:'quantity', title:'Qty',    render:r=> {
-        const val = pickNumberFromPaths(r, QTY_PATHS)
-        return val === null ? '—' : val
-      } },
-    { key:'availability', title:'الإتاحة', render:r=> <Availability qty={pickNumberFromPaths(r, QTY_PATHS)||0} /> },
-    { key:'expiry', title:'Expiry', render:r=> getPath(r,'expiry') || '—' },
-    { key:'category', title:'Category', render:r=> getPath(r,'category') || '—' },
+    { key:'name', title:'Name' },
+    { key:'barcode', title:'Barcode' },
+    { key:'salePrice', title:'Sale Price', render:r=>fmtMoney(r.salePrice) },
+    { key:'cost', title:'Cost', render:r=>fmtMoney(r.cost) },
+    { key:'stock', title:'Qty' },
+    { key:'category', title:'Category' },
+    { key:'__actions', title:'Actions', render:r => (
+      <div className="flex gap-2">
+        <button className="btn" onClick={()=>setModal({open:true, edit:r})}>Edit</button>
+        <button className="btn" onClick={()=>removeOne(r)}>Delete</button>
+      </div>
+    )},
   ]
-
-  const exportExcel = () => {
-    const mapped = filtered.map(r => ({
-      Name: getPath(r,'name') || '',
-      Barcode: String(getPath(r,'barcode') || getPath(r,'sku') || ''),
-      SalePrice: pickNumberFromPaths(r, SALE_PATHS) ?? 0,
-      Cost: pickNumberFromPaths(r, COST_PATHS) ?? 0,
-      Quantity: pickNumberFromPaths(r, QTY_PATHS) ?? 0,
-      Expiry: getPath(r,'expiry') || '',
-      Category: getPath(r,'category') || ''
-    }))
-    exportRowsToExcel(mapped, [
-      {key:'Name',title:'Name'},
-      {key:'Barcode',title:'Barcode'},
-      {key:'SalePrice',title:'SalePrice'},
-      {key:'Cost',title:'Cost'},
-      {key:'Quantity',title:'Quantity'},
-      {key:'Expiry',title:'Expiry'},
-      {key:'Category',title:'Category'},
-    ], "products.xlsx")
-  }
 
   function addNew(){
     setModal({open:true, edit:{
-      name:'', barcode:'', salePrice:0, cost:0, quantity:0, expiry:'', category:''
+      name:'', barcode:'', salePrice:0, cost:0, stock:0, unit:'', category:'', notes:''
     }})
   }
 
   async function save(p){
-    const body = {
-      ...p,
-      salePrice: pickNumberFromPaths(p, SALE_PATHS) ?? 0,
-      cost:      pickNumberFromPaths(p, COST_PATHS) ?? 0,
-      quantity:  pickNumberFromPaths(p, QTY_PATHS) ?? 0,
-    }
-    const method = p._id ? 'PUT' : 'POST'
-    const endpoint = p._id ? `/api/products/${p._id}` : '/api/products'
-    const res = await fetch(url(endpoint), {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    })
-    const saved = await res.json()
-    setRows(prev => p._id ? prev.map(x => x._id===p._id ? saved : x) : [saved, ...prev])
-    setModal({open:false, edit:null})
+    try{
+      if (!p.barcode || !p.name) { alert('Barcode and Name are required'); return; }
+      const body = { barcode:p.barcode, name:p.name, category:p.category||'', cost:+p.cost||0, salePrice:+p.salePrice||0, stock:+p.stock||0, unit:p.unit||'', notes:p.notes||'' };
+      const exists = rows.some(x => String(x.barcode) === String(p.barcode));
+      if (exists) {
+        await fetch(url(`/api/products/google/${encodeURIComponent(p.barcode)}`), {
+          method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+        })
+      } else {
+        await fetch(url('/api/products/google'), {
+          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+        })
+      }
+      await load(); setModal({open:false, edit:null})
+    } catch(e) { alert('Save failed:\n' + e.message) }
   }
 
-  // ====== استيراد إكسل (بالعناوين الإنجليزية) ======
-  const canon = (s='') => String(s).toLowerCase().replace(/\s+/g,'').trim()
-  const pickAny = (obj, keys) => {
-    for (const k of keys) if (obj[k] !== undefined) return obj[k]
-    const map = Object.fromEntries(Object.keys(obj).map(k => [canon(k), obj[k]]))
-    for (const k of keys) {
-      const v = map[canon(k)]
-      if (v !== undefined) return v
-    }
-    return undefined
+  async function removeOne(p){
+    if (!confirm('Delete this product?')) return
+    try {
+      await fetch(url(`/api/products/google/${encodeURIComponent(p.barcode)}`), { method:'DELETE' })
+      await load()
+    } catch(e){ alert('Delete failed:\n' + e.message) }
   }
 
   async function onImportExcel(e){
@@ -145,56 +88,45 @@ export default function ProductsPage(){
     if (!f) return
     try{
       const rowsX = await readExcelRows(f)
-      const norm = rowsX.map(rRaw => {
-        const r = rRaw || {}
-        const name     = pickAny(r, ['Name','Product','Item','Product Name'])
-        const barcode  = pickAny(r, ['Barcode','Code','SKU'])
-        const sale     = pickAny(r, ['Sale Price','Selling Price','Sell Price','Price','Unit Price'])
-        const cost     = pickAny(r, ['Cost','Cost Price','Purchase Price','Buy Price'])
-        const qty      = pickAny(r, ['Quantity','Qty','Stock'])
-        const expiry   = pickAny(r, ['Expiry','Expiry Date','Expire','Exp'])
-        const category = pickAny(r, ['Category','Cat'])
-
-        return {
-          name: name || '',
-          barcode: barcode ? String(barcode) : '',
-          salePrice: Number(sale ?? 0),
-          cost: Number(cost ?? 0),
-          quantity: Number(qty ?? 0),
-          expiry: expiry ? String(expiry).slice(0,10) : '',
-          category: category || ''
-        }
-      })
-
-      const res = await fetch(url('/api/products/import/excel'), {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ items: norm })
-      })
-      if (!res.ok) throw new Error(await res.text())
-
-      const rr = await fetch(url('/api/products'))
-      const dd = await rr.json()
-      setRows(Array.isArray(dd) ? dd : [])
-      e.target.value=""
-      alert('Imported products.')
-    }catch(err){
-      alert('Import failed:\n' + err.message)
-    }
+      const norm = rowsX.map(r=>({
+        name: r.Name || r['Product Name'] || r.Product || r.Item || '',
+        barcode: String(r.Barcode || r.Code || r.SKU || ''),
+        salePrice: Number(r['Sale Price'] ?? r['Selling Price'] ?? r['Sell Price'] ?? r['Unit Price'] ?? r.Price ?? 0),
+        cost: Number(r.Cost ?? r['Cost Price'] ?? r['Purchase Price'] ?? r['Buy Price'] ?? 0),
+        stock: Number(r.Quantity ?? r.Qty ?? r.Stock ?? 0),
+        expiry: r.Expiry ? String(r.Expiry).slice(0,10) : '',
+        category: r.Category || ''
+      }))
+      for (const it of norm) {
+        if (!it.barcode || !it.name) continue;
+        await fetch(url('/api/products/google'), {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ ...it, unit:'', notes:'' })
+        })
+      }
+      await load(); e.target.value=""; alert('Imported to Google Sheet.')
+    }catch(err){ alert('Import failed:\n' + err.message) }
   }
 
-  // ====== جديد: مزامنة مع Google Sheets (CSV عام) ======
-  async function syncGoogle(){
-    try{
-      const res = await fetch(url('/api/products/sync/google-csv'), { method:'POST' })
-      if (!res.ok) throw new Error(await res.text())
-      const rr = await fetch(url('/api/products'))
-      const dd = await rr.json()
-      setRows(Array.isArray(dd) ? dd : [])
-      alert('Google Sheet synced.')
-    }catch(err){
-      alert('Sync failed:\n' + err.message)
-    }
+  const exportExcel = async () => {
+    const { exportRowsToExcel } = await import('../lib/excel')
+    const mapped = filtered.map(r => ({
+      Name: r.name || '',
+      Barcode: String(r.barcode || r.sku || ''),
+      SalePrice: Number(r.salePrice || 0),
+      Cost: Number(r.cost || 0),
+      Quantity: Number(r.stock || 0),
+      Category: r.category || ''
+    }))
+    exportRowsToExcel(mapped, [
+      {key:'Name',title:'Name'},
+      {key:'Barcode',title:'Barcode'},
+      {key:'SalePrice',title:'SalePrice'},
+      {key:'Cost',title:'Cost'},
+      {key:'Quantity',title:'Quantity'},
+      {key:'Category',title:'Category'},
+    ], "products.xlsx")
   }
 
   return (
@@ -207,7 +139,6 @@ export default function ProductsPage(){
             <button className="btn btn-primary" onClick={addNew}>Add Product</button>
             <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onImportExcel} />
             <button className="btn" onClick={()=>fileRef.current?.click()}>Import Excel</button>
-            <button className="btn" onClick={syncGoogle}>Sync Google</button>{/* جديد */}
             <ActionMenu label="Export" options={[{ label: 'Excel', onClick: exportExcel }]} />
           </div>
         }
@@ -230,31 +161,33 @@ export default function ProductsPage(){
             </label>
             <label className="text-sm">
               <span className="block text-mute mb-1">Sale Price</span>
-              <input type="number" className="border border-line rounded-xl px-3 py-2 w-full"
-                     value={pickNumberFromPaths(modal.edit, ['salePrice','price','sellingPrice','unitPrice']) ?? 0}
+              <input type="number" className="border border-line rounded-xl px-3 py-2 w-full" value={modal.edit.salePrice}
                      onChange={e=>setModal(m=>({...m, edit:{...m.edit, salePrice:+e.target.value}}))}/>
             </label>
             <label className="text-sm">
               <span className="block text-mute mb-1">Cost</span>
-              <input type="number" className="border border-line rounded-xl px-3 py-2 w-full"
-                     value={pickNumberFromPaths(modal.edit, ['cost','costPrice','purchasePrice','buyPrice']) ?? 0}
+              <input type="number" className="border border-line rounded-xl px-3 py-2 w-full" value={modal.edit.cost}
                      onChange={e=>setModal(m=>({...m, edit:{...m.edit, cost:+e.target.value}}))}/>
             </label>
             <label className="text-sm">
               <span className="block text-mute mb-1">Quantity</span>
-              <input type="number" className="border border-line rounded-xl px-3 py-2 w-full"
-                     value={pickNumberFromPaths(modal.edit, ['quantity','qty','stock']) ?? 0}
-                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, quantity:+e.target.value}}))}/>
+              <input type="number" className="border border-line rounded-xl px-3 py-2 w-full" value={modal.edit.stock}
+                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, stock:+e.target.value}}))}/>
             </label>
             <label className="text-sm">
-              <span className="block text-mute mb-1">Expiry</span>
-              <input type="date" className="border border-line rounded-xl px-3 py-2 w-full" value={modal.edit.expiry}
-                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, expiry:e.target.value}}))}/>
-            </label>
-            <label className="col-span-2 text-sm">
               <span className="block text-mute mb-1">Category</span>
               <input className="border border-line rounded-xl px-3 py-2 w-full" value={modal.edit.category}
                      onChange={e=>setModal(m=>({...m, edit:{...m.edit, category:e.target.value}}))}/>
+            </label>
+            <label className="text-sm">
+              <span className="block text-mute mb-1">Unit</span>
+              <input className="border border-line rounded-xl px-3 py-2 w-full" value={modal.edit.unit || ''}
+                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, unit:e.target.value}}))}/>
+            </label>
+            <label className="col-span-2 text-sm">
+              <span className="block text-mute mb-1">Notes</span>
+              <input className="border border-line rounded-xl px-3 py-2 w-full" value={modal.edit.notes || ''}
+                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, notes:e.target.value}}))}/>
             </label>
             <div className="col-span-2 flex gap-2 justify-end">
               <button className="btn" onClick={()=>setModal({open:false, edit:null})}>Cancel</button>

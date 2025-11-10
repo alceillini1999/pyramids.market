@@ -1,4 +1,3 @@
-// backend/src/server.js
 let dotenvLoaded = false;
 try { require('dotenv').config(); dotenvLoaded = true; } catch { console.log('dotenv not found — using host env only'); }
 
@@ -41,16 +40,18 @@ app.get('/api/healthz', (req, res) =>
   res.json({ status:'ok', name:'pyramids-mart-backend', dotenvLoaded })
 );
 
-// Routers
+// Routers (keep existing auth/uploads/stats/pos/whatsapp as is)
 app.use('/api/auth', require('./routes/auth'));
-app.use('/api/clients', require('./routes/clients'));
-app.use('/api/products', require('./routes/products'));
-app.use('/api/expenses', require('./routes/expenses'));
-app.use('/api/sales', require('./routes/sales'));
 app.use('/api/whatsapp', require('./routes/whatsapp'));
 app.use('/api/uploads', require('./routes/uploads'));
 app.use('/api/stats', require('./routes/stats'));
 app.use('/api/pos', require('./routes/pos'));
+
+// ✅ Switch to Google Sheets–backed routes
+app.use('/api/products', require('./routes/products.google'));
+app.use('/api/clients',  require('./routes/clients.google'));
+app.use('/api/expenses', require('./routes/expenses.google'));
+app.use('/api/sales',    require('./routes/sales.google'));
 
 // Static frontend
 const distDir = path.join(__dirname, '../../frontend/dist');
@@ -70,7 +71,7 @@ if (hasDist) {
   app.get('/', (_req, res) => res.json({ status:'backend-live', note:'frontend/dist not found' }));
 }
 
-// Mongo
+// Mongo (still used for auth/others)
 const MONGO = process.env.MONGO_URI || 'mongodb://localhost:27017/pyramidsmart';
 mongoose.connect(MONGO).then(() => {
   console.log('Mongo connected');

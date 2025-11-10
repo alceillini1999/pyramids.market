@@ -1,27 +1,12 @@
-// frontend/src/pages/ClientsPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Section from '../components/Section'
 import Table from '../components/Table'
+import Modal from '../components/Modal'
 import ActionMenu from '../components/ActionMenu'
-import { readExcelRows, mapRowByAliases, exportRowsToExcel } from "../lib/excel"
 
 const API_ORIG = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 const API_BASE = API_ORIG.replace(/\/api$/, "");
 const url = (p) => `${API_BASE}${p.startsWith('/') ? p : `/${p}`}`;
-
-const CLIENT_ALIASES = {
-  name: ["name", "client", "customer", "client name"],
-  phone: ["phone", "mobile", "msisdn", "tel", "Phone"],
-  countryCode: ["countrycode", "cc", "CountryCode", "Country Code"],
-  area: ["area"],
-  notes: ["notes", "note"],
-  tags: ["tags", "labels"],
-  orders: ["orders", "ordercount", "total orders"],
-  lastOrder: ["lastorder", "last order", "lastorderdate"],
-  points: ["points", "loyalty", "score"],
-}
-
-function onlyDigits(s){ return String(s ?? "").replace(/[^0-9]/g, ""); }
 
 async function api(p, opts={}) {
   const res = await fetch(url(p), { mode:'cors', credentials:'include', ...opts });
@@ -33,16 +18,16 @@ async function api(p, opts={}) {
 export default function ClientsPage() {
   const [rows, setRows] = useState([])
   const [q, setQ]       = useState('')
+  const [modal, setModal] = useState({ open:false, edit:null })
   const fileRef = useRef(null)
 
-  useEffect(()=>{
-    (async ()=>{
-      try {
-        const out = await api('/api/clients');
-        setRows(Array.isArray(out.data) ? out.data : out);
-      } catch (e) { alert(e.message) }
-    })()
-  }, [])
+  async function load(){
+    const out = await api('/api/clients');
+    const list = Array.isArray(out?.data) ? out.data : (Array.isArray(out)? out : []);
+    setRows(list);
+  }
+
+  useEffect(()=>{ load().catch(e=>alert(e.message)) }, [])
 
   const filtered = useMemo(
     ()=>rows.filter(r => (r.name || "").toLowerCase().includes(q.toLowerCase()) || (r.phone || "").includes(q)),
@@ -52,59 +37,72 @@ export default function ClientsPage() {
   const columns = [
     { key: 'name',   title: 'Name' },
     { key: 'phone',  title: 'Phone' },
-    { key: 'countryCode', title: 'CC' },
-    { key: 'orders', title: 'Orders' },
-    { key: 'lastOrder', title: 'Last Order' },
-    { key: 'points', title: 'Points' },
+    { key: 'address', title: 'Address' },
+    { key: 'loyaltyPoints', title: 'Points' },
+    { key: '__actions', title: 'Actions', render: r => (
+      <div className="flex gap-2">
+        <button className="btn" onClick={()=>setModal({open:true, edit:r})}>Edit</button>
+        <button className="btn" onClick={()=>removeOne(r)}>Delete</button>
+      </div>
+    )},
   ]
 
-  const exportExcel = () => exportRowsToExcel(filtered, [
-    { key:'name', title:'Name' },
-    { key:'phone', title:'Phone' },
-    { key:'countryCode', title:'CountryCode' },
-    { key:'area', title:'Area' },
-    { key:'notes', title:'Notes' },
-    { key:'tags', title:'Tags' },
-    { key:'orders', title:'Orders' },
-    { key:'lastOrder', title:'Last Order' },
-    { key:'points', title:'Points' },
-  ], "clients.xlsx")
+  function addNew(){
+    setModal({ open:true, edit:{ phone:'', name:'', address:'', loyaltyPoints:0, notes:'' } })
+  }
+
+  async function save(item){
+    try{
+      const isEdit = !!item._isEditFlag || rows.some(r => r.phone === item.phone);
+      if (isEdit) {
+        await api(`/api/clients/google/${encodeURIComponent(item.phone)}`, {
+          method:'PUT', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(item)
+        });
+      } else {
+        await api('/api/clients/google', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(item)
+        });
+      }
+      await load(); setModal({open:false, edit:null});
+    }catch(e){ alert('Save failed:\n' + e.message) }
+  }
+
+  async function removeOne(r){
+    if (!confirm('Delete this client?')) return;
+    try{
+      await api(`/api/clients/google/${encodeURIComponent(r.phone)}`, { method:'DELETE' });
+      await load();
+    }catch(e){ alert('Delete failed:\n' + e.message) }
+  }
 
   async function onImportExcel(e){
     const f = e.target.files?.[0]; if (!f) return
     try {
-      const rowsX = await readExcelRows(f)
+      const { readExcelRows, mapRowByAliases } = await import('../lib/excel');
+      const CLIENT_ALIASES = {
+        name: ["name","client","customer","client name"],
+        phone: ["phone","mobile","msisdn","tel","Phone"],
+        address: ["address","addr","location"],
+        notes: ["notes","note"],
+        loyaltyPoints: ["points","loyalty","score"],
+      };
+      const rowsX = await readExcelRows(f);
       const norm = rowsX.map(r => mapRowByAliases(r, CLIENT_ALIASES)).map(r => ({
         name: r.name || "",
         phone: String(r.phone || ""),
-        countryCode: onlyDigits(r.countryCode || ""),
-        area: r.area || "",
+        address: r.address || "",
         notes: r.notes || "",
-        tags: r.tags || "",
-        orders: Number(r.orders || 0),
-        lastOrder: String(r.lastOrder || ""),
-        points: Number(r.points || 0),
-      }))
-      try {
-        await api('/api/clients/bulk-upsert', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ items: norm }) })
-      } catch {
-        const fd = new FormData(); fd.append('file', f);
-        await api('/api/clients/import/excel', { method:'POST', body: fd })
+        loyaltyPoints: Number(r.loyaltyPoints || 0),
+      }));
+      // append each
+      for (const it of norm) {
+        if (!it.phone || !it.name) continue;
+        await api('/api/clients/google', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(it) });
       }
-      const out = await api('/api/clients');
-      setRows(Array.isArray(out.data) ? out.data : out);
-      e.target.value = "";
-      alert('Imported & synced.');
+      await load(); e.target.value=""; alert('Imported to Google Sheet.');
     } catch (err) { alert('Failed to import:\n' + err.message) }
-  }
-
-  async function syncGoogle(){
-    try {
-      await api('/api/clients/sync/google-csv?mode=mirror', { method:'POST' });
-      const out = await api('/api/clients');
-      setRows(Array.isArray(out.data) ? out.data : out);
-      alert('Clients synced from Google Sheet.');
-    } catch (e) { alert('Sync failed:\n' + e.message) }
   }
 
   return (
@@ -114,8 +112,7 @@ export default function ClientsPage() {
         actions={
           <div className="flex items-center gap-2">
             <input className="border border-line rounded-xl px-3 py-2" placeholder="Search…" value={q} onChange={e=>setQ(e.target.value)} />
-            <button className="btn" onClick={syncGoogle}>Sync Google</button>
-            <ActionMenu label="Export" options={[{ label: 'Excel', onClick: exportExcel }]} />
+            <button className="btn btn-primary" onClick={addNew}>Add Client</button>
             <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onImportExcel} />
             <button className="btn" onClick={()=>fileRef.current?.click()}>Import Excel</button>
           </div>
@@ -124,9 +121,42 @@ export default function ClientsPage() {
         <Table columns={columns} data={filtered} />
       </Section>
 
-      <Section title="Loyalty & Notes">
-        <div className="text-mute">Purchase history UI placeholder — to connect with backend later.</div>
-      </Section>
+      <Modal open={modal.open} onClose={()=>setModal({open:false, edit:null})} title={modal.edit ? 'Edit Client' : 'Add Client'}>
+        {modal.edit && (
+          <div className="grid grid-cols-2 gap-3">
+            <label className="text-sm">
+              <span className="block text-mute mb-1">Name</span>
+              <input className="border border-line rounded-xl px-3 py-2 w-full" value={modal.edit.name}
+                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, name:e.target.value}}))}/>
+            </label>
+            <label className="text-sm">
+              <span className="block text-mute mb-1">Phone</span>
+              <input className="border border-line rounded-xl px-3 py-2 w-full" value={modal.edit.phone}
+                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, phone:e.target.value}}))}/>
+            </label>
+            <label className="text-sm col-span-2">
+              <span className="block text-mute mb-1">Address</span>
+              <input className="border border-line rounded-xl px-3 py-2 w-full" value={modal.edit.address || ''}
+                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, address:e.target.value}}))}/>
+            </label>
+            <label className="text-sm">
+              <span className="block text-mute mb-1">Points</span>
+              <input type="number" className="border border-line rounded-xl px-3 py-2 w-full" value={modal.edit.loyaltyPoints || 0}
+                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, loyaltyPoints:+e.target.value}}))}/>
+            </label>
+            <label className="text-sm col-span-2">
+              <span className="block text-mute mb-1">Notes</span>
+              <input className="border border-line rounded-xl px-3 py-2 w-full" value={modal.edit.notes || ''}
+                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, notes:e.target.value}}))}/>
+            </label>
+
+            <div className="col-span-2 flex gap-2 justify-end">
+              <button className="btn" onClick={()=>setModal({open:false, edit:null})}>Cancel</button>
+              <button className="btn btn-primary" onClick={()=>save(modal.edit)}>Save</button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
