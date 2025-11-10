@@ -48,10 +48,10 @@ app.use('/api/stats', require('./routes/stats'));
 app.use('/api/pos', require('./routes/pos'));
 
 // ✅ Switch to Google Sheets–backed routes
-app.use('/api/products', require('./routes/products.google'));
-app.use('/api/clients',  require('./routes/clients.google'));
-app.use('/api/expenses', require('./routes/expenses.google'));
-app.use('/api/sales',    require('./routes/sales.google'));
+app.use('/api/products', require('./routes/products'));
+app.use('/api/clients',  require('./routes/clients'));
+app.use('/api/expenses', require('./routes/expenses'));
+app.use('/api/sales',    require('./routes/sales'));
 
 // Static frontend
 const distDir = path.join(__dirname, '../../frontend/dist');
