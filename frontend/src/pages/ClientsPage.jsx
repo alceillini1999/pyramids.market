@@ -1,4 +1,3 @@
-
 // frontend/src/pages/ClientsPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Section from '../components/Section'
@@ -6,7 +5,8 @@ import Table from '../components/Table'
 import ActionMenu from '../components/ActionMenu'
 import { readExcelRows, mapRowByAliases, exportRowsToExcel } from "../lib/excel"
 
-const API_BASE = import.meta.env.VITE_API_URL || "";
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/,"");
+const url = (p) => `${API_BASE}${p.startsWith('/')?p:`/${p}`}`;
 
 const CLIENT_ALIASES = {
   name: ["name", "client", "customer", "client name"],
@@ -20,12 +20,13 @@ const CLIENT_ALIASES = {
   points: ["points", "loyalty", "score"],
 }
 
-function normPhone(p){ return String(p ?? "").replace(/[^0-9]/g, ""); }
+function onlyDigits(s){ return String(s ?? "").replace(/[^0-9]/g, ""); }
 
-async function api(path, opts={}){
-  const res = await fetch(`${API_BASE}${path}`, { credentials:"include", ...opts });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+async function api(p, opts={}){
+  const res = await fetch(url(p), { mode:'cors', credentials:'include', ...opts });
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText} @ ${url(p)}\n` + await res.text().catch(()=>"(no body)"));
+  const ct = res.headers.get('content-type') || '';
+  return ct.includes('json') ? res.json() : res.text();
 }
 
 export default function ClientsPage() {
@@ -37,10 +38,8 @@ export default function ClientsPage() {
     (async ()=>{
       try {
         const out = await api('/api/clients');
-        setRows(Array.isArray(out.data) ? out.data : []);
-      } catch (e) {
-        console.error('Failed to fetch clients', e);
-      }
+        setRows(Array.isArray(out.data) ? out.data : out);
+      } catch (e) { alert(e.message) }
     })()
   }, [])
 
@@ -78,7 +77,7 @@ export default function ClientsPage() {
       const norm = rowsX.map(r => mapRowByAliases(r, CLIENT_ALIASES)).map(r => ({
         name: r.name || "",
         phone: String(r.phone || ""),
-        countryCode: normPhone(r.countryCode || ""),
+        countryCode: onlyDigits(r.countryCode || ""),
         area: r.area || "",
         notes: r.notes || "",
         tags: r.tags || "",
@@ -87,29 +86,35 @@ export default function ClientsPage() {
         points: Number(r.points || 0),
       }))
 
-      await api('/api/clients/bulk-upsert', {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: norm }),
-      })
+      try {
+        await api('/api/clients/bulk-upsert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: norm })
+        })
+      } catch (e1) {
+        // fallback: upload file
+        const fd = new FormData();
+        fd.append('file', f);
+        await api('/api/clients/import/excel', { method:'POST', body: fd })
+      }
 
       const out = await api('/api/clients');
-      setRows(Array.isArray(out.data) ? out.data : []);
-
-      e.target.value = ""
-      alert("Imported & synced.")
+      setRows(Array.isArray(out.data) ? out.data : out);
+      e.target.value = "";
+      alert('Imported & synced.');
     } catch (err) {
-      console.error(err)
-      alert("Failed to import/sync: " + err.message)
+      alert('Failed to import:\n' + err.message)
     }
   }
 
   async function removeRow(r){
+    if (!confirm('Delete this client?')) return;
     try{
       await api(`/api/clients/${r._id}`, { method: "DELETE" })
       setRows(rows.filter(x=>x._id!==r._id))
     }catch(e){
-      alert("Delete failed")
+      alert("Delete failed:\n" + e.message)
     }
   }
 

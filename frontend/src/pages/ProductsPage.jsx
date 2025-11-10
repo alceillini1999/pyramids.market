@@ -4,6 +4,9 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { readExcelRows, mapRowByAliases, exportTableToExcel } from "../lib/excel";
 
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/,"");
+const url = (p) => `${API_BASE}${p.startsWith('/')?p:`/${p}`}`;
+
 function getVal(obj, keys, def = "") {
   for (const k of keys) if (obj[k] !== undefined && obj[k] !== null) return obj[k];
   return def;
@@ -31,7 +34,7 @@ export default function Products() {
     async function fetchProducts() {
       try {
         setLoading(true);
-        const res = await fetch("/api/products");
+        const res = await fetch(url("/api/products"));
         const data = await res.json();
         setProducts(Array.isArray(data) ? data : []);
       } catch (e) {
@@ -57,19 +60,20 @@ export default function Products() {
         totalSales: Number(r.totalSales || 0),
         updatedAt: r.updatedAt || new Date().toISOString(),
       }));
-      // Merge strategy: upsert by name
-      setProducts(prev => {
-        const byName = Object.create(null);
-        for (const p of prev) byName[(p.name || "").toLowerCase()] = p;
-        for (const n of normalized) {
-          const key = (n.name || "").toLowerCase();
-          if (!key) continue;
-          byName[key] = { ...(byName[key] || {}), ...n };
-        }
-        return Object.values(byName);
+      // Persist via backend /bulk-import (JSON mode)
+      const res = await fetch(url('/api/products/bulk-import'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ json: normalized }),
       });
+      if (!res.ok) throw new Error(await res.text());
+
+      // reload
+      const out = await fetch(url("/api/products"));
+      const data = await out.json();
+      setProducts(Array.isArray(data) ? data : []);
       e.target.value = "";
-      alert("Imported Excel successfully into Products.");
+      alert("Imported & saved.");
     } catch (err) {
       console.error(err);
       alert("Failed to import Excel: " + err.message);

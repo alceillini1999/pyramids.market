@@ -1,38 +1,45 @@
 // frontend/src/pages/ExpensesPage.jsx
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useMemo, useRef, useState, useEffect } from 'react'
 import Section from '../components/Section'
 import Table from '../components/Table'
 import Modal from '../components/Modal'
 import ActionMenu from '../components/ActionMenu'
 import { readExcelRows, mapRowByAliases, exportRowsToExcel } from "../lib/excel"
 
-const K = n => `KSh ${Number(n).toLocaleString('en-KE')}`
-
-const INIT = [
-  { id: 1, name: 'Rent',       date: '2025-02-01', amount: 50000, type: 'Fixed',    note: '' },
-  { id: 2, name: 'Packaging',  date: '2025-02-03', amount: 3800,  type: 'Variable', note: '' },
-  { id: 3, name: 'Delivery',   date: '2025-02-04', amount: 2100,  type: 'Variable', note: '' },
-]
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/,"");
+const url = (p) => `${API_BASE}${p.startsWith('/')?p:`/${p}`}`;
 
 const EXPENSE_ALIASES = {
   name: ["name", "expense", "expense name"],
   date: ["date", "tx date", "expense date"],
   amount: ["amount", "value", "cost"],
-  type: ["type", "category", "kind"],
-  note: ["note", "description", "details"],
-  id: ["id", "key"],
+  category: ["type", "category", "kind"],
+  notes: ["note", "notes", "description", "details"],
+  _id: ["_id", "id"],
 }
 
+const K = n => `KSh ${Number(n).toLocaleString('en-KE')}`
+
 export default function ExpensesPage() {
-  const [rows, setRows]   = useState(INIT)
+  const [rows, setRows]   = useState([])
   const [from, setFrom]   = useState('')
   const [to, setTo]       = useState('')
   const [modal, setModal] = useState({ open:false, edit:null })
   const fileRef = useRef(null)
 
+  useEffect(()=>{
+    (async ()=>{
+      try {
+        const res = await fetch(url('/api/expenses'));
+        const data = await res.json();
+        setRows(Array.isArray(data)? data : []);
+      } catch (e) { console.error(e); }
+    })()
+  }, [])
+
   const filt = useMemo(()=>rows.filter(r=>{
-    if (from && r.date < from) return false
-    if (to   && r.date > to)   return false
+    if (from && r.date.slice(0,10) < from) return false
+    if (to   && r.date.slice(0,10) > to)   return false
     return true
   }), [rows,from,to])
 
@@ -42,31 +49,41 @@ export default function ExpensesPage() {
     { key:'name',   title:'Name' },
     { key:'date',   title:'Date' },
     { key:'amount', title:'Amount', render:r=>K(r.amount) },
-    { key:'type',   title:'Type' },
-    { key:'note',   title:'Note' },
+    { key:'category',   title:'Category' },
+    { key:'notes',   title:'Notes' },
   ]
 
   const exportExcel = () => exportRowsToExcel(filt, [
     {key:'name', title:'Name'},
     {key:'date', title:'Date'},
     {key:'amount', title:'Amount'},
-    {key:'type', title:'Type'},
-    {key:'note', title:'Note'},
+    {key:'category', title:'Category'},
+    {key:'notes', title:'Notes'},
   ], "expenses.xlsx")
 
   function addNew(){
     setModal({
       open: true,
-      edit: { id: Date.now(), name:'', date: new Date().toISOString().slice(0,10), amount:0, type:'Variable', note:'' }
+      edit: { name:'', date: new Date().toISOString().slice(0,10), amount:0, category:'Variable', notes:'' }
     })
   }
 
-  function save(item){
-    setRows(prev=>{
-      const ex = prev.some(p=>p.id===item.id)
-      return ex ? prev.map(p=>p.id===item.id? item : p) : [item, ...prev]
-    })
-    setModal({open:false, edit:null})
+  async function save(item){
+    try {
+      const method = item._id ? 'PUT' : 'POST';
+      const endpoint = item._id ? `/api/expenses/${item._id}` : '/api/expenses';
+      const res = await fetch(url(endpoint), {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item),
+      });
+      const saved = await res.json();
+      if (item._id) setRows(prev => prev.map(p => p._id === item._id ? saved : p));
+      else setRows(prev => [saved, ...prev]);
+      setModal({open:false, edit:null})
+    } catch (e) {
+      alert('Failed to save: ' + e.message)
+    }
   }
 
   async function onImportExcel(e){
@@ -75,19 +92,26 @@ export default function ExpensesPage() {
     try {
       const rowsX = await readExcelRows(f)
       const norm = rowsX.map(r => mapRowByAliases(r, EXPENSE_ALIASES)).map(r => ({
-        id: r.id || Date.now() + Math.random(),
+        _id: r._id || undefined,
         name: r.name || "",
         date: String(r.date || "").slice(0,10),
         amount: Number(r.amount || 0),
-        type: r.type || "Variable",
-        note: r.note || "",
+        category: r.category || "",
+        notes: r.notes || "",
       }))
-      setRows(prev => [...norm, ...prev])
-      e.target.value = ""
-      alert("Imported Excel successfully into Expenses.")
+      const res = await fetch(url('/api/expenses/bulk-upsert'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: norm })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const out = await fetch(url('/api/expenses'));
+      const data = await out.json();
+      setRows(Array.isArray(data)? data : []);
+      e.target.value = "";
+      alert("Imported & saved.");
     } catch (err) {
-      console.error(err)
-      alert("Failed to import Excel: " + err.message)
+      alert("Import failed:\n" + err.message)
     }
   }
 
@@ -116,8 +140,8 @@ export default function ExpensesPage() {
       >
         <Table columns={[...columns, {key:'__actions', title:'Actions', render:r=>(
           <div className="flex gap-2">
-            <button className="btn" onClick={()=>setModal({open:true, edit:{...r}})}>Edit</button>
-            <button className="btn" onClick={()=>setRows(rows.filter(x=>x.id!==r.id))}>Delete</button>
+            <button className="btn" onClick={()=>setModal({open:true, edit:{...r, date:String(r.date).slice(0,10)}})}>Edit</button>
+            <button className="btn" onClick={()=>setRows(rows.filter(x=>x._id!==r._id))}>Delete</button>
           </div>
         )}]} data={filt} />
         <div className="text-right mt-2 text-sm text-mute">Total: <strong>{K(total)}</strong></div>
@@ -148,22 +172,24 @@ export default function ExpensesPage() {
             </label>
 
             <label className="text-sm">
-              <span className="block text-mute mb-1">Type</span>
-              <select className="border border-line rounded-xl px-3 py-2 w-full"
-                      value={modal.edit.type}
-                      onChange={e=>setModal(m=>({...m, edit:{...m.edit, type:e.target.value}}))}>
-                <option>Fixed</option>
-                <option>Variable</option>
-              </select>
+              <span className="block text-mute mb-1">Category</span>
+              <input className="border border-line rounded-xl px-3 py-2 w-full"
+                     value={modal.edit.category}
+                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, category:e.target.value}}))}/>
             </label>
 
             <label className="col-span-2 text-sm">
-              <span className="block text-mute mb-1">Description</span>
+              <span className="block text-mute mb-1">Notes</span>
               <input className="border border-line rounded-xl px-3 py-2 w-full"
                      placeholder="Optional note"
-                     value={modal.edit.note}
-                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, note:e.target.value}}))}/>
+                     value={modal.edit.notes}
+                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, notes:e.target.value}}))}/>
             </label>
+
+            <div className="col-span-2 flex gap-2 justify-end">
+              <button className="btn" onClick={()=>setModal({open:false, edit:null})}>Cancel</button>
+              <button className="btn btn-primary" onClick={()=>save(modal.edit)}>Save</button>
+            </div>
           </div>
         )}
       </Modal>

@@ -1,23 +1,48 @@
+// frontend/src/pages/WhatsAppPage.jsx
 import { useState, useEffect } from "react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 
-export default function WhatsAppPage() {
-  const [clients, setClients] = useState([
-    { name: "Mohamed Adel", phone: "+254700000001" },
-    { name: "Sara Nabil", phone: "+254700000002" },
-    { name: "Omar Ali", phone: "+254700000003" },
-  ]);
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/,"");
+const url = (p) => `${API_BASE}${p.startsWith('/')?p:`/${p}`}`;
 
+export default function WhatsAppPage() {
+  const [clients, setClients] = useState([]);
   const [selectedClients, setSelectedClients] = useState([]);
   const [message, setMessage] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [status, setStatus] = useState("Not connected");
   const [qrImage, setQrImage] = useState(null);
-  const [loadingQR, setLoadingQR] = useState(false);
 
-  const apiBase =
-    import.meta.env.VITE_WA_WEB_BASE || "https://pyramids-market.onrender.com";
+  // Load clients from backend instead of hardcoded list
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(url('/api/clients'), { credentials:'include' });
+        const json = await res.json();
+        setClients(Array.isArray(json.data) ? json.data : json);
+      } catch (e) {
+        console.error("Failed to load clients", e);
+      }
+    })();
+  }, []);
+
+  // WhatsApp status
+  useEffect(() => {
+    const apiBase = API_BASE;
+    async function fetchStatus() {
+      try {
+        const res = await fetch(`${apiBase}/api/whatsapp/status`);
+        const data = await res.json();
+        setStatus(data.state || "Unknown");
+      } catch (err) {
+        setStatus("Error");
+      }
+    }
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleSelectClient = (phone) => {
     setSelectedClients((prev) =>
@@ -33,147 +58,66 @@ export default function WhatsAppPage() {
       return;
     }
 
-    const res = await fetch(`${apiBase}/api/whatsapp/send-bulk`, {
+    const res = await fetch(`${API_BASE}/api/whatsapp/send-bulk`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        to: selectedClients,
-        message,
-        mediaUrl: imageUrl,
-      }),
+      body: JSON.stringify({ to: selectedClients, message, mediaUrl: imageUrl || undefined }),
     });
+
     const data = await res.json();
-    console.log("Send result:", data);
-    alert("Messages sent! Check logs for results.");
-  };
-
-  const handleInit = async () => {
-    setLoadingQR(true);
-    setQrImage(null);
-
-    await fetch(`${apiBase}/api/whatsapp/init`);
-
-    const qrRes = await fetch(`${apiBase}/api/whatsapp/qr-image`);
-    if (qrRes.ok) {
-      const blob = await qrRes.blob();
-      const url = URL.createObjectURL(blob);
-      setQrImage(url);
-      setStatus("Scan the QR with WhatsApp app");
+    if (data.ok) {
+      alert("Messages sent successfully!");
     } else {
-      setStatus("Failed to load QR code");
-    }
-
-    setLoadingQR(false);
-  };
-
-  const handleRefreshStatus = async () => {
-    const res = await fetch(`${apiBase}/api/whatsapp/status`);
-    const data = await res.json();
-    if (data.connected) {
-      setStatus("✅ Connected");
-      setQrImage(null);
-    } else {
-      setStatus("❌ Not connected");
+      alert("Failed to send messages: " + (data.error || "Unknown error"));
     }
   };
-
-  useEffect(() => {
-    handleRefreshStatus();
-  }, []);
 
   return (
-    <div className="grid grid-cols-3 gap-6 p-6">
-      {/* Clients */}
-      <Card className="col-span-1">
-        <CardContent className="p-4 space-y-2">
-          <h2 className="text-lg font-semibold mb-2">Clients</h2>
-          <div className="flex justify-between mb-2">
-            <Button
-              size="sm"
-              onClick={() => setSelectedClients(clients.map((c) => c.phone))}
-            >
-              Select All
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setSelectedClients([])}>
-              Clear
-            </Button>
-          </div>
-          {clients.map((c) => (
-            <label
-              key={c.phone}
-              className="flex items-center justify-between border rounded px-3 py-2 cursor-pointer"
-            >
-              <div>
-                <div className="font-medium">{c.name}</div>
-                <div className="text-sm text-gray-500">{c.phone}</div>
-              </div>
-              <input
-                type="checkbox"
-                checked={selectedClients.includes(c.phone)}
-                onChange={() => handleSelectClient(c.phone)}
-              />
-            </label>
-          ))}
-        </CardContent>
-      </Card>
-
-      {/* Compose message */}
-      <Card className="col-span-1">
+    <div className="space-y-4">
+      <Card>
         <CardContent className="p-4">
-          <h2 className="text-lg font-semibold mb-2">Compose message</h2>
-          <textarea
-            className="w-full border rounded p-2 mb-2 h-28"
-            placeholder="Write your message..."
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-          />
-          <input
-            className="w-full border rounded p-2 mb-3"
-            placeholder="Optional image URL (public link)"
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-          />
-          <div className="flex justify-between">
-            <Button onClick={handleSend}>Send</Button>
-            <Button variant="outline" onClick={() => setMessage("")}>
-              Clear
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* WhatsApp Web */}
-      <Card className="col-span-1">
-        <CardContent className="p-4 text-center space-y-4">
-          <h2 className="text-lg font-semibold mb-2">WhatsApp Web</h2>
-          <div className="text-sm text-gray-600">{status}</div>
-
-          {loadingQR && <div>Loading QR...</div>}
-
-          {qrImage && (
-            <img
-              src={qrImage}
-              alt="WhatsApp QR Code"
-              className="mx-auto border rounded shadow p-2"
-              style={{ width: "220px", height: "220px" }}
-            />
-          )}
-
-          <div className="flex justify-center gap-2">
-            <Button size="sm" onClick={handleInit}>
-              Init / Refresh QR
-            </Button>
-            <Button size="sm" variant="outline" onClick={handleRefreshStatus}>
-              Check Status
-            </Button>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold">WhatsApp</h2>
+            <div>Status: {status}</div>
           </div>
 
-          <p className="text-xs text-gray-500 mt-2">
-            Click "Init / Refresh QR", then scan the code with WhatsApp → Linked devices.
-          </p>
-          <p className="text-xs text-gray-400">
-            This connects to your server at {apiBase} via Baileys (WhatsApp Web protocol).
-          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h3 className="font-semibold mb-2">Clients</h3>
+              <div className="max-h-80 overflow-y-auto border rounded p-2">
+                {clients.map((c) => (
+                  <label key={c._id} className="flex items-center gap-2 py-1">
+                    <input
+                      type="checkbox"
+                      value={c.phone}
+                      checked={selectedClients.includes(c.phone)}
+                      onChange={() => handleSelectClient(c.phone)}
+                    />
+                    <span>{c.name}</span>
+                    <span className="text-mute">({c.phone})</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="font-semibold mb-2">Message</h3>
+              <textarea
+                className="w-full border rounded p-2"
+                rows={6}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Write your message here..."
+              />
+              <input
+                className="w-full border rounded p-2 my-2"
+                placeholder="Image URL (optional)"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+              />
+              <Button onClick={handleSend}>Send</Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
