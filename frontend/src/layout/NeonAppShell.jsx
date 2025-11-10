@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation, Outlet } from "react-router-dom";
-import OverviewNeonAnimated from "@/ui/theme/OverviewNeonAnimated";
+import OverviewNeonAnimated from "../ui/theme/OverviewNeonAnimated"; // مسار نسبي
 
 const C = {
   bg: "#0B0F14",
@@ -83,9 +83,7 @@ function SideBar() {
   );
 }
 
-/** يغلف كل الصفحة بخلفية متحركة + بار علوي + شريط أيسر */
 export default function NeonAppShell({ children }) {
-  // يدعم الاستخدام بطريقتين: تمرير children مباشرة أو استخدام <Outlet/>
   return (
     <OverviewNeonAnimated>
       <div className="min-h-screen" style={{ background: C.bg, color: "#fff" }}>

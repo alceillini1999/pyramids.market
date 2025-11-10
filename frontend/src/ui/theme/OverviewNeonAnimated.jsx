@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { motion } from "framer-motion";
 
-/** خلفية نيون متناسقة مع ألوان شعار Pyramids: ذهبى/بني + لمعة علوية */
+/** خلفية نيون متناسقة مع ألوان شعار Pyramids: ذهبي/بني + لمعة علوية + خطوط ضوئية */
 export default function OverviewNeonAnimated({ children }) {
   useEffect(() => {
     const style = document.createElement("style");
@@ -51,7 +51,7 @@ export default function OverviewNeonAnimated({ children }) {
           mixBlendMode: "screen", animation: "blobB 18s linear infinite",
         }}/>
       </div>
-      {/* خطوط ضوء */}
+      {/* خطوط ضوئية */}
       <div aria-hidden className="absolute inset-0 -z-10 pointer-events-none">
         {[0,1].map(i=>(
           <div key={i} style={{

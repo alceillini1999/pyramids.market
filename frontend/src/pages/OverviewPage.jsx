@@ -58,7 +58,6 @@ function useOverviewData(){
           }}
           chartData={[...sales, ...expenses].length
             ? (() => {
-                // بناء بيانات الرسم من صافي الربح حسب اختيارك
                 const now = new Date()
                 const dayKey = (d)=> new Date(d).toISOString().slice(0,10)
                 const todayKey = dayKey(now)
@@ -90,13 +89,8 @@ function useOverviewData(){
 
             <Section
               title="Sales vs Expenses vs Net"
-              actions={
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* إن رغبت بإبقاء أزرار الفترات، أبقها كما هي هنا */}
-                </div>
-              }
+              actions={<div className="flex flex-wrap items-center gap-2">{/* خيارات الفترة إن رغبت */}</div>}
             >
-              {/* إن كان لديك مخطط جاهز أبقِه، وإلا سيظهر النص أدناه */}
               <ChartSales data={[]} />
             </Section>
           </div>
