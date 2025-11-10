@@ -1,5 +1,11 @@
-// ===== تحميل ملف البيئة .env =====
-require('dotenv').config();
+// ===== تحميل ملف البيئة .env (اختياري) =====
+let dotenvLoaded = false;
+try {
+  require('dotenv').config();
+  dotenvLoaded = true;
+} catch (e) {
+  console.log('dotenv not found — using host env only');
+}
 
 // ===== المكتبات الأساسية =====
 const express = require('express');
@@ -51,7 +57,7 @@ app.use(express.json());
 
 // ============ Health ============
 app.get('/api/healthz', (req, res) =>
-  res.json({ status: 'ok', name: 'pyramids-mart-backend' })
+  res.json({ status: 'ok', name: 'pyramids-mart-backend', dotenvLoaded })
 );
 
 // ============ API Routers ============
@@ -76,7 +82,6 @@ if (hasDist) {
     res.sendFile(path.join(distDir, 'index.html'));
   });
 } else {
-  // لا تُسقِط السيرفر إذا الـdist غير موجود (مثلاً أثناء نشر Backend فقط)
   app.get('/', (_req, res) => {
     res.json({ status: 'backend-live', note: 'frontend/dist not found' });
   });
