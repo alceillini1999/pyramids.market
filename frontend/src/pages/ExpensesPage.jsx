@@ -10,6 +10,20 @@ const url = (p) => `${API_BASE}${p.startsWith('/') ? p : `/${p}`}`
 
 const K = n => `KSh ${Number(n || 0).toLocaleString('en-KE')}`
 
+// Excel serial -> "YYYY-MM-DD"
+function excelSerialToISO(n){
+  const ms = Math.round((Number(n) - 25569) * 86400 * 1000)
+  return new Date(ms).toISOString().slice(0,10)
+}
+// Show "DD/MM/YYYY" nicely whatever backend sends
+function displayDate(v){
+  if (typeof v === 'number') return excelSerialToISO(v).split('-').reverse().join('/')
+  const s = String(v||'').slice(0,10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.split('-').reverse().join('/')
+  if (/^\d{2}-\d{2}-\d{4}$/.test(s)) return s.replaceAll('-', '/')
+  return s
+}
+
 export default function ExpensesPage() {
   const [rows, setRows]   = useState([])
   const [from, setFrom]   = useState('')
@@ -35,7 +49,7 @@ export default function ExpensesPage() {
 
   const columns = [
     { key:'description', title:'Description' },
-    { key:'date',   title:'Date', render:r=>String(r.date||'').slice(0,10) },
+    { key:'date',   title:'Date', render:r=>displayDate(r.date) },
     { key:'amount', title:'Amount', render:r=>K(r.amount) },
     { key:'notes',  title:'Notes' },
   ]
