@@ -3,51 +3,59 @@ import React, { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 
 /**
- * خلفية نيونية ثلاثية الأبعاد:
- * - طبقات عميقة مع translateZ لمحاكاة العمق
- * - Parallax بتحريك الماوس
- * - تدرجات متحركة + دوران بطيء + ضجيج خفيف
- * - يحترم prefers-reduced-motion
- * لا تغييرات على أي وظائف — مجرد غلاف بصري.
+ * خلفية نيونيّة بأسلوب Pinterest:
+ * - Mesh gradient متدفق (5s)
+ * - Blobs ضوئية تدور وتتموّج
+ * - خطوط/وميض Light Streaks هادئ
+ * - Parallax ثلاثي الأبعاد بالماوس (أو حركة تلقائية للموبايل)
+ * - احترام prefers-reduced-motion
+ * لا تغييرات على وظائفك — غلاف بصري فقط.
  */
 export default function OverviewNeonAnimated({ children }) {
   const rootRef = useRef(null);
-  const frameRef = useRef(0);
+  const rafRef = useRef(0);
+  const autoRef = useRef(0);
 
   useEffect(() => {
-    // Keyframes و متغيرات CSS
+    // Keyframes + طبقات أنيميشن
     const style = document.createElement("style");
     style.innerHTML = `
-      @keyframes gradientMove {
+      @keyframes gradientFlow {
         0% { background-position: 0% 50%; }
         50% { background-position: 100% 50%; }
         100% { background-position: 0% 50%; }
       }
-      @keyframes spinSlow {
-        0% { transform: rotate(0deg) translateZ(-150px); }
-        100% { transform: rotate(360deg) translateZ(-150px); }
+      @keyframes rotBlobA {
+        0% { transform: rotate(0deg) scale(1) }
+        50% { transform: rotate(180deg) scale(1.06) }
+        100% { transform: rotate(360deg) scale(1) }
       }
-      @keyframes floatPulse {
-        0%,100% { opacity: .45; filter: blur(50px); }
-        50%     { opacity: .7;  filter: blur(70px); }
+      @keyframes rotBlobB {
+        0% { transform: rotate(0deg) scale(1.05) }
+        50% { transform: rotate(-180deg) scale(0.98) }
+        100% { transform: rotate(-360deg) scale(1.05) }
+      }
+      @keyframes streakDrift {
+        0%   { transform: translateX(-10%) skewX(-12deg); opacity:.25 }
+        50%  { opacity:.45 }
+        100% { transform: translateX(110%) skewX(-12deg); opacity:.25 }
+      }
+      @keyframes pulseSoft {
+        0%,100% { opacity:.5; filter: blur(52px) }
+        50%     { opacity:.75; filter: blur(70px) }
       }
       @media (prefers-reduced-motion: reduce) {
-        .anim-3d, .anim-parallax, .anim-spin, .anim-gradient, .anim-float {
-          animation: none !important;
-          transition: none !important;
-        }
+        .anim, .parallax-layer { animation: none !important; transition: none !important; }
       }
     `;
     document.head.appendChild(style);
 
-    // Parallax بالماوس
+    // Parallax (سطح خفيف) — ماوس على الديسكتوب، حركة تلقائية على الموبايل
     const el = rootRef.current;
     if (!el) return;
 
-    const bounds = () => el.getBoundingClientRect();
-    let rect = bounds();
-
-    const onResize = () => { rect = bounds(); };
+    let rect = el.getBoundingClientRect();
+    const onResize = () => { rect = el.getBoundingClientRect(); };
     window.addEventListener("resize", onResize);
 
     const setVars = (rx, ry, tx, ty) => {
@@ -60,50 +68,42 @@ export default function OverviewNeonAnimated({ children }) {
     const onMove = (e) => {
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
-      const px = (x / rect.width) - 0.5;   // -0.5 .. 0.5
-      const py = (y / rect.height) - 0.5;
-
-      // زوايا ميل خفيفة + إزاحة طبقات
-      const maxTilt = 7;       // درجات
-      const maxShift = 24;     // بكسل
-      const rx = (+py * -maxTilt);
-      const ry = (+px *  maxTilt);
-      const tx = (+px *  maxShift);
-      const ty = (+py *  maxShift);
-
-      // سموذنج عبر rAF
-      cancelAnimationFrame(frameRef.current);
-      frameRef.current = requestAnimationFrame(() => setVars(rx, ry, tx, ty));
+      const px = x / rect.width - 0.5;
+      const py = y / rect.height - 0.5;
+      const maxTilt = 7;
+      const maxShift = 22;
+      const rx = py * -maxTilt;
+      const ry = px *  maxTilt;
+      const tx = px *  maxShift;
+      const ty = py *  maxShift;
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => setVars(rx, ry, tx, ty));
     };
 
-    // تعطيل على اللمس (موبايل): سنضبط حركة تلقائية خفيفة
-    let autoT = 0, autoRAF = 0;
-    const prefersTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
-
-    const autoTick = () => {
-      autoT += 0.02;
-      const rx = Math.sin(autoT) * 3;
-      const ry = Math.cos(autoT * 0.8) * 3;
-      const tx = Math.sin(autoT * 0.7) * 10;
-      const ty = Math.cos(autoT * 0.9) * 10;
-      setVars(rx, ry, tx, ty);
-      autoRAF = requestAnimationFrame(autoTick);
-    };
-
-    if (prefersTouch) {
-      autoRAF = requestAnimationFrame(autoTick);
+    const isTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    if (isTouch) {
+      // حركة تلقائية خفيفة للموبايل
+      const tick = () => {
+        autoRef.current += 0.03;
+        const t = autoRef.current;
+        const rx = Math.sin(t) * 3;
+        const ry = Math.cos(t * 0.8) * 3;
+        const tx = Math.sin(t * 0.7) * 10;
+        const ty = Math.cos(t * 0.9) * 10;
+        setVars(rx, ry, tx, ty);
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
     } else {
       el.addEventListener("mousemove", onMove);
     }
 
-    // قيم ابتدائية
-    setVars(0, 0, 0, 0);
+    setVars(0,0,0,0);
 
     return () => {
       window.removeEventListener("resize", onResize);
-      if (!prefersTouch) el.removeEventListener("mousemove", onMove);
-      cancelAnimationFrame(frameRef.current);
-      cancelAnimationFrame(autoRAF);
+      if (!isTouch) el.removeEventListener("mousemove", onMove);
+      cancelAnimationFrame(rafRef.current);
     };
   }, []);
 
@@ -112,90 +112,126 @@ export default function OverviewNeonAnimated({ children }) {
       ref={rootRef}
       className="min-h-screen relative overflow-hidden"
       style={{
-        // منظور ثلاثي أبعاد
         perspective: "1000px",
         transformStyle: "preserve-3d",
-        // fallback خلفية داكنة
         backgroundColor: "#0B0F14",
       }}
     >
-      {/* --- LAYER -3: Mesh Gradient واسع بتحريك موقع الخلفية --- */}
+      {/* LAYER -3: Mesh Gradient سريع (5s) */}
       <div
         aria-hidden
-        className="absolute inset-0 -z-10 anim-gradient"
+        className="absolute inset-0 -z-30 anim"
         style={{
-          transform: "translateZ(-120px) scale(1.2)",
+          transform: "translateZ(-140px) scale(1.25)",
           background:
-            "radial-gradient(60% 60% at 15% 20%, rgba(242,192,65,0.18) 0%, transparent 70%)," + // gold
-            "radial-gradient(50% 50% at 85% 15%, rgba(34,211,238,0.16) 0%, transparent 65%)," +  // cyan
-            "radial-gradient(40% 40% at 80% 75%, rgba(168,85,247,0.14) 0%, transparent 65%)," +  // violet
-            "linear-gradient(120deg, #0b0f14 0%, #0f172a 50%, #0b0f14 100%)",
-          backgroundSize: "200% 200%",
-          animation: "gradientMove 8s ease-in-out infinite",
-          filter: "saturate(120%)",
+            "linear-gradient(-45deg, #0B0F14, #0F172A, #0EA5E9, #A855F7, #F59E0B)",
+          backgroundSize: "400% 400%",
+          animation: "gradientFlow 5s ease-in-out infinite", // ← سرعة 5s
+          filter: "saturate(115%)",
         }}
       />
 
-      {/* --- LAYER -2: قرص ضوء يدور ببطء (Glow Disc) --- */}
-      <div
-        aria-hidden
-        className="absolute -z-10 anim-spin"
-        style={{
-          top: "10%",
-          left: "50%",
-          width: "120vmax",
-          height: "120vmax",
-          marginLeft: "-60vmax",
-          borderRadius: "50%",
-          background:
-            "conic-gradient(from 0deg, rgba(34,211,238,0.08), rgba(168,85,247,0.12), rgba(249,115,22,0.10), rgba(34,211,238,0.08))",
-          transformStyle: "preserve-3d",
-          transform: "translateZ(-150px)",
-          animation: "spinSlow 60s linear infinite",
-          mixBlendMode: "screen",
-          pointerEvents: "none",
-        }}
-      />
+      {/* LAYER -2: Blobs ضوئية تدور وتتموّج */}
+      <div aria-hidden className="absolute inset-0 -z-20 pointer-events-none">
+        {/* Blob A */}
+        <div
+          className="anim"
+          style={{
+            position: "absolute",
+            top: "8%",
+            left: "10%",
+            width: "60vmax",
+            height: "60vmax",
+            borderRadius: "50%",
+            background:
+              "radial-gradient(35% 35% at 50% 50%, rgba(34,211,238,0.25), transparent 70%)",
+            mixBlendMode: "screen",
+            transform: "translateZ(-100px)",
+            animation: "rotBlobA 16s linear infinite, pulseSoft 6s ease-in-out infinite",
+          }}
+        />
+        {/* Blob B */}
+        <div
+          className="anim"
+          style={{
+            position: "absolute",
+            bottom: "6%",
+            right: "12%",
+            width: "52vmax",
+            height: "52vmax",
+            borderRadius: "50%",
+            background:
+              "radial-gradient(35% 35% at 50% 50%, rgba(168,85,247,0.25), transparent 70%)",
+            mixBlendMode: "screen",
+            transform: "translateZ(-110px)",
+            animation: "rotBlobB 20s linear infinite, pulseSoft 7s ease-in-out infinite",
+          }}
+        />
+        {/* Glow خطّي خفيف عبر الوسط */}
+        <div
+          className="anim"
+          style={{
+            position: "absolute",
+            top: "35%",
+            left: "-20%",
+            width: "140%",
+            height: "14rem",
+            background:
+              "linear-gradient(90deg, transparent, rgba(242,192,65,0.18), rgba(249,115,22,0.20), rgba(168,85,247,0.18), transparent)",
+            filter: "blur(24px)",
+            opacity: 0.6,
+            transform: "translateZ(-90px) rotate(-2deg)",
+          }}
+        />
+      </div>
 
-      {/* --- LAYER -1: لطخات ضوء ناعمة تطفو --- */}
-      <div
-        aria-hidden
-        className="absolute inset-0 -z-10 anim-float"
-        style={{
-          transform: "translateZ(-60px)",
-          background:
-            "radial-gradient(36vmax 24vmax at 20% 70%, rgba(249,115,22,0.15), transparent 70%)," + // orange
-            "radial-gradient(30vmax 20vmax at 80% 30%, rgba(168,85,247,0.20), transparent 70%)",
-          animation: "floatPulse 6s ease-in-out infinite",
-          pointerEvents: "none",
-        }}
-      />
+      {/* LAYER -1: Light Streaks هادئة تمر كل فترة */}
+      <div aria-hidden className="absolute inset-0 -z-10 pointer-events-none">
+        {[0, 1].map((i) => (
+          <div
+            key={i}
+            className="anim"
+            style={{
+              position: "absolute",
+              top: i === 0 ? "22%" : "68%",
+              left: "-10%",
+              width: "40%",
+              height: "2px",
+              background:
+                "linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)",
+              filter: "blur(1px)",
+              transform: "translateZ(-80px)",
+              animation: `streakDrift ${i === 0 ? 6 : 7.5}s ease-in-out ${i ? "1.5s" : "0s"} infinite`,
+              mixBlendMode: "screen",
+            }}
+          />
+        ))}
+      </div>
 
-      {/* --- LAYER 0: مجموعة الطبقات التي ستُحرّك بالـ tilt/parallax --- */}
+      {/* LAYER 0: محتوى التطبيق مع Parallax */}
       <div
-        className="anim-parallax"
+        className="parallax-layer"
         style={{
           transformStyle: "preserve-3d",
           transform:
             "rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateX(var(--tx, 0px)) translateY(var(--ty, 0px))",
-          transition: "transform 180ms ease",
+          transition: "transform 160ms ease",
         }}
       >
-        {/* محتوى التطبيق */}
         <motion.div
           initial={{ opacity: 0, y: 22 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.45 }}
           className="relative z-10"
         >
           {children}
         </motion.div>
       </div>
 
-      {/* --- LAYER +1: ضجيج خفيف لزيادة الواقعية --- */}
+      {/* LAYER +1: ضجيج فيلمي خفيف */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-20 opacity-[.07]"
+        className="pointer-events-none absolute inset-0 z-20 opacity-[.06]"
         style={{
           backgroundImage:
             "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.8'/></svg>\")",
