@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import Section from '../components/Section'
 import ChartSales from '../components/ChartSales'
-import OverviewNeon from '../ui/theme/OverviewNeon'
-import OverviewNeonAnimated from '../ui/theme/OverviewNeonAnimated'
-import NeonAppShell from '../layout/NeonAppShell'
+// ❌ لم نعد نستخدم OverviewNeon (الذي كان يرسم شريطاً داخلياً)
+// import OverviewNeon from '../ui/theme/OverviewNeon'
+// import OverviewNeonAnimated from '../ui/theme/OverviewNeonAnimated'
+import '../styles/pyramids-theme.css' // لضمان الثيم على البطاقات
 
 const K = n => `KSh ${Number(n).toLocaleString('en-KE')}`
 
@@ -49,7 +50,7 @@ function useOverviewData(){
   return { sales, expenses, totals, refresh }
 }
 
-function OverviewPage() {
+export default function OverviewPage() {
   const [range, setRange] = useState('day')
   const [from, setFrom]   = useState('')
   const [to, setTo]       = useState('')
@@ -107,38 +108,40 @@ function OverviewPage() {
   }, [range, from, to, sales, expenses])
 
   return (
-    <NeonAppShell>
-      <OverviewNeonAnimated>
-        <OverviewNeon
-          stats={{
-            balance: totals.totalSales,
-            investment: totals.totalSales,
-            totalGain: Math.max(totals.netProfit, 0),
-            totalLoss: Math.max(-totals.netProfit, 0),
-          }}
-          chartData={dataset.map(d => ({ label: d.label, value: d.net }))}
-          actions={{ onDeposit: () => {}, onWithdraw: () => {} }}
-          rightPanel={{ portfolioName: 'Pyramids Mart', value: totals.totalSales, holders: 50 }}
-        >
-          <div className="space-y-6">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="grid gap-4 grid-cols-1 md:grid-cols-3 flex-1">
-                <div className="bg-elev p-4"><div className="card-title">Total Sales</div><div className="card-value mt-1">{K(totals.totalSales)}</div></div>
-                <div className="bg-elev p-4"><div className="card-title">Expenses</div><div className="card-value mt-1">{K(totals.totalExpenses)}</div></div>
-                <div className="bg-elev p-4"><div className="card-title">Net Profit</div><div className="card-value mt-1">{K(totals.netProfit)}</div></div>
-              </div>
-              <button className="btn" onClick={refresh}>تحديث</button>
-            </div>
+    <div className="p-6 space-y-6">
+      {/* صف الكروت الأساسية */}
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+        <div className="bg-elev card p-4">
+          <div className="card-title">Total Sales</div>
+          <div className="card-value mt-1">{K(totals.totalSales)}</div>
+        </div>
+        <div className="bg-elev card p-4">
+          <div className="card-title">Expenses</div>
+          <div className="card-value mt-1">{K(totals.totalExpenses)}</div>
+        </div>
+        <div className="bg-elev card p-4">
+          <div className="card-title">Net Profit</div>
+          <div className="card-value mt-1">{K(totals.netProfit)}</div>
+        </div>
+      </div>
 
-            <Section title="Sales vs Expenses vs Net" actions={<div className="flex flex-wrap items-center gap-2"></div>}>
-              {dataset.length ? <ChartSales data={dataset} /> :
-                <div className="h-64 grid place-items-center text-mute">No data for selected range</div>}
-            </Section>
+      {/* إجراءات عامة */}
+      <div className="flex items-center gap-2">
+        <button className="btn btn-primary" onClick={refresh}>تحديث</button>
+      </div>
+
+      {/* المخطط والقسم */}
+      <Section
+        title="Sales vs Expenses vs Net"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {/* لو أحببت أزرار day/month/year، أضفها هنا لاحقاً */}
           </div>
-        </OverviewNeon>
-      </OverviewNeonAnimated>
-    </NeonAppShell>
+        }
+      >
+        {dataset.length ? <ChartSales data={dataset} /> :
+          <div className="h-64 grid place-items-center text-mute">No data for selected range</div>}
+      </Section>
+    </div>
   )
 }
-
-export default OverviewPage;  // ✅ تصدير Default صريح
