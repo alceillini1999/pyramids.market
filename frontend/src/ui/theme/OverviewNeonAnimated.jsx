@@ -2,9 +2,11 @@ import React, { useEffect } from "react";
 import { motion } from "framer-motion";
 
 /**
- * خلفية نيونيّة متناسقة مع ألوان شعار Pyramids Mart
- * — ذهبي + بني + أسود + لمسات ضوء دافئة
- * بدون ثلاثي الأبعاد، فقط حركة تدرّج وانسياب خفيف
+ * خلفية نيون متناسقة مع ألوان شعار Pyramids Mart:
+ * - Mesh Gradient (5s) + Blobs بنغمة ذهبية/بنية
+ * - خطوط ضوئية هادئة
+ * - ✨ انعكاس ذهبي ناعم أعلى الصفحة (Top Gold Glow)
+ * - بدون ثلاثي أبعاد أو Parallax
  */
 export default function OverviewNeonAnimated({ children }) {
   useEffect(() => {
@@ -26,9 +28,13 @@ export default function OverviewNeonAnimated({ children }) {
         100% { transform: rotate(-360deg) scale(1); }
       }
       @keyframes streakMove {
-        0%   { transform: translateX(-10%) skewX(-12deg); opacity:.25; }
-        50%  { opacity:.45; }
-        100% { transform: translateX(110%) skewX(-12deg); opacity:.25; }
+        0%   { transform: translateX(-10%) skewX(-12deg); opacity:.22; }
+        50%  { opacity:.40; }
+        100% { transform: translateX(110%) skewX(-12deg); opacity:.22; }
+      }
+      @keyframes goldSheen {
+        0%, 100% { opacity: .18; filter: blur(30px); }
+        50%      { opacity: .28; filter: blur(36px); }
       }
     `;
     document.head.appendChild(style);
@@ -39,24 +45,24 @@ export default function OverviewNeonAnimated({ children }) {
       className="min-h-screen relative overflow-hidden"
       style={{ backgroundColor: "#0B0F14" }}
     >
-      {/* 🌄 خلفية متدرجة بألوان الشعار */}
+      {/* خلفية متدرجة بألوان الشعار (ذهبي/بني) */}
       <div
         className="absolute inset-0 -z-30"
         style={{
           background:
             "linear-gradient(-45deg, #1A120B, #2B1D12, #F2C041, #8B5E3C, #1A120B)",
           backgroundSize: "400% 400%",
-          animation: "gradientFlow 6s ease-in-out infinite",
+          animation: "gradientFlow 5s ease-in-out infinite", // سرعة 5s
           filter: "saturate(115%) contrast(105%)",
         }}
       />
 
-      {/* ☀️ دوائر ضوئية متناغمة */}
+      {/* Blobs ضوئية متناغمة */}
       <div aria-hidden className="absolute inset-0 -z-20 pointer-events-none">
         <div
           style={{
             position: "absolute",
-            top: "8%",
+            top: "10%",
             left: "6%",
             width: "60vmax",
             height: "60vmax",
@@ -76,26 +82,26 @@ export default function OverviewNeonAnimated({ children }) {
             height: "55vmax",
             borderRadius: "50%",
             background:
-              "radial-gradient(40% 40% at 50% 50%, rgba(139,94,60,0.20), transparent 70%)",
+              "radial-gradient(40% 40% at 50% 50%, rgba(139,94,60,0.22), transparent 70%)",
             mixBlendMode: "screen",
             animation: "blobB 18s linear infinite",
           }}
         />
       </div>
 
-      {/* ✨ خطوط ضوء دافئة */}
+      {/* خطوط ضوئية دافئة */}
       <div aria-hidden className="absolute inset-0 -z-10 pointer-events-none">
         {[0, 1].map((i) => (
           <div
             key={i}
             style={{
               position: "absolute",
-              top: i === 0 ? "25%" : "70%",
+              top: i === 0 ? "26%" : "72%",
               left: "-10%",
               width: "45%",
               height: "2px",
               background:
-                "linear-gradient(90deg, transparent, rgba(242,192,65,0.4), rgba(139,94,60,0.35), transparent)",
+                "linear-gradient(90deg, transparent, rgba(242,192,65,0.38), rgba(139,94,60,0.34), transparent)",
               filter: "blur(1px)",
               animation: `streakMove ${i === 0 ? 6 : 8}s ease-in-out ${
                 i ? "1s" : "0s"
@@ -106,7 +112,24 @@ export default function OverviewNeonAnimated({ children }) {
         ))}
       </div>
 
-      {/* 💎 المحتوى */}
+      {/* ✨ انعكاس ذهبي ناعم أعلى الصفحة (يشبه لمعة شعار ذهبية) */}
+      <div
+        aria-hidden
+        className="absolute -z-5 left-1/2 -translate-x-1/2"
+        style={{
+          top: "-6rem",
+          width: "120vmax",
+          height: "18rem",
+          background:
+            "radial-gradient(80% 100% at 50% 100%, rgba(242,192,65,0.30) 0%, rgba(249,115,22,0.12) 40%, transparent 70%)",
+          mixBlendMode: "screen",
+          animation: "goldSheen 5.5s ease-in-out infinite",
+          pointerEvents: "none",
+          filter: "blur(26px)",
+        }}
+      />
+
+      {/* المحتوى */}
       <motion.div
         initial={{ opacity: 0, y: 22 }}
         animate={{ opacity: 1, y: 0 }}
@@ -116,7 +139,7 @@ export default function OverviewNeonAnimated({ children }) {
         {children}
       </motion.div>
 
-      {/* 🧩 ضجيج بسيط للواقعية */}
+      {/* ضجيج بسيط لملمس واقعي */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 z-20 opacity-[.05]"
