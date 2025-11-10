@@ -77,7 +77,6 @@ router.post('/sync/google-csv', async (req, res) => {
         profit,
         paymentMethod: pm,
         createdAt: d || new Date(),
-        // items غير مدعومة من الشيت (يمكن إضافتها لاحقًا إذا وُجدت أعمدة)
       };
     };
 
@@ -101,17 +100,4 @@ router.post('/sync/google-csv', async (req, res) => {
       const all = await Sale.find({}, { _id:1, invoiceNumber:1, clientName:1, createdAt:1, total:1 }).lean();
       const toDel = all.filter(s => !keys.has(makeKey(s.invoiceNumber, s.clientName, toDateOnly(s.createdAt), s.total)));
       if (toDel.length) {
-        await Sale.deleteMany({ _id: { $in: toDel.map(x=>x._id) } });
-        deleted = toDel.length;
-      }
-    }
-
-    const totalCount = await Sale.countDocuments();
-    res.json({ ok:true, mode, upserted: normalized.length, deleted, total: totalCount });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: e.message });
-  }
-});
-
-module.exports = router;
+        await S

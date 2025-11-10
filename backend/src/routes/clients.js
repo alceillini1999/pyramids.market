@@ -103,7 +103,7 @@ router.get('/export/excel', async (req, res) => {
 // JSON bulk upsert (keep)
 router.post('/bulk-upsert', bulkUpsert);
 
-// ======= NEW: Google CSV Mirror Sync =======
+// ======= Google CSV Mirror Sync =======
 router.post('/sync/google-csv', async (req, res) => {
   try {
     const url = process.env.GSHEET_CLIENTS_CSV_URL;
@@ -114,7 +114,6 @@ router.post('/sync/google-csv', async (req, res) => {
     const rows = await csvtojson().fromString(csv);
 
     const normalize = (r) => {
-      // دعم مسميات أعمدة مرنة
       const m = {};
       for (const k of Object.keys(r)) m[canon(k)] = r[k];
 
@@ -129,8 +128,7 @@ router.post('/sync/google-csv', async (req, res) => {
       const lastMessageAt = toDateOnly(m['lastmessageat'] || m['last message at'] || '');
       const points = num(m['points'] || m['loyalty'] || m['score'], 0);
 
-      const key = phone || name; // مفتاح المرآة
-
+      const key = phone || name;
       return { key, name, phone, countryCode: cc, area, notes, tags, orders, lastOrder, lastMessageAt, points };
     };
 

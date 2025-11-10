@@ -4,129 +4,157 @@ import ChartSales from '../components/ChartSales'
 
 const K = n => `KSh ${Number(n).toLocaleString('en-KE')}`
 
-// بيانات تجريبية للمخطط (نظهرها فقط إذا كان لدينا Totals فعلية > 0)
-const DATA = {
-  day: [
-    { label: '8am', sales: 12500, expenses: 4200, net: 8300 },
-    { label: '10am', sales: 18300, expenses: 6000, net: 12300 },
-    { label: '12pm', sales: 22100, expenses: 9300, net: 12800 },
-    { label: '2pm', sales: 15600, expenses: 7000, net: 8600 },
-    { label: '4pm', sales: 19800, expenses: 7900, net: 11900 },
-  ],
-  month: Array.from({length: 12}).map((_,i)=>({ label:`D${i+1}`, sales: 10000+ i*1200, expenses: 5000+i*800, net: 5000+i*400 })),
-  year: Array.from({length: 12}).map((_,i)=>({ label:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i], sales: 250000+i*18000, expenses: 120000+i*10000, net: 130000+i*8000 })),
-}
-
-const API_ORIG = (import.meta.env.VITE_API_URL || "").replace(/\/+$/,"")
-const API_BASE = API_ORIG.replace(/\/api$/,"")
+const API_ORIG = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "")
+const API_BASE = API_ORIG.replace(/\/api$/, "")
 const url = (p) => `${API_BASE}${p.startsWith('/') ? p : `/${p}`}`
 
-// يسحب الإجماليات من /stats/overview وإن رجعت أصفار، يحتسب من /expenses و /sales
-function useOverviewTotals(){
-  const [tot, setTot] = useState({ totalSales:0, totalExpenses:0, netProfit:0 })
+// ---- helpers ----
+const fmtDay = (d) => new Date(d).toISOString().slice(0,10) // YYYY-MM-DD
+const startOfDay = (d) => { const x=new Date(d); x.setHours(0,0,0,0); return x }
+const endOfDay   = (d) => { const x=new Date(d); x.setHours(23,59,59,999); return x }
 
-  const fetchFromStats = async () => {
-    const r = await fetch(url('/api/stats/overview'), { credentials:'include' })
-    if (!r.ok) throw new Error('stats failed')
-    const d = await r.json()
-    return {
-      totalSales: Number(d?.totalSales || 0),
-      totalExpenses: Number(d?.totalExpenses || 0),
-      netProfit: Number(d?.netProfit || 0),
-    }
+function rangeDays(from, to) {
+  const out = []
+  let d = startOfDay(from)
+  const end = startOfDay(to)
+  while (d <= end) {
+    out.push(new Date(d))
+    d = new Date(d.getTime() + 86400000)
   }
+  return out
+}
 
-  const fallbackCompute = async () => {
-    // جمع المصروفات
-    let totalExpenses = 0
-    try {
-      const r1 = await fetch(url('/api/expenses'), { credentials:'include' })
-      const expenses = await r1.json()
-      if (Array.isArray(expenses)) {
-        totalExpenses = expenses.reduce((s, e) => s + Number(e.amount||0), 0)
-      }
-    } catch {}
-
-    // جمع المبيعات + الربح
-    let totalSales = 0
-    let netProfit = 0
-    try {
-      // نجلب أول صفحة كبيرة كفاية (Backend قد يدعم التصفّح)
-      const r2 = await fetch(url('/api/sales?page=1&limit=1000'), { credentials:'include' })
-      const sales = await r2.json()
-      const rows = Array.isArray(sales) ? sales : Array.isArray(sales.rows) ? sales.rows : []
-      rows.forEach(s => {
-        totalSales += Number(s.total || 0)
-        netProfit += Number(s.profit || 0)
-      })
-    } catch {}
-
-    return { totalSales, totalExpenses, netProfit }
-  }
+function useOverviewData(){
+  const [sales, setSales] = useState([])
+  const [expenses, setExpenses] = useState([])
 
   const refresh = async ()=>{
-    try {
-      const a = await fetchFromStats()
-      // إن كانت كلها صفر، نستخدم الحساب اليدوي
-      if ((a.totalSales + a.totalExpenses + a.netProfit) === 0) {
-        const b = await fallbackCompute()
-        setTot(b)
-      } else {
-        setTot(a)
-      }
-    } catch {
-      const b = await fallbackCompute()
-      setTot(b)
-    }
+    // sales (نطلب 1000 عنصر كحد أقصى للعرض)
+    const sRes = await fetch(url('/api/sales?page=1&limit=1000'), { credentials:'include' })
+    const sJson = await sRes.json()
+    const sRows = Array.isArray(sJson) ? sJson : (Array.isArray(sJson.rows) ? sJson.rows : [])
+    setSales(sRows)
+
+    // expenses
+    const eRes = await fetch(url('/api/expenses'), { credentials:'include' })
+    const eRows = await eRes.json()
+    setExpenses(Array.isArray(eRows) ? eRows : [])
   }
 
-  useEffect(()=>{ refresh() }, [])
-  return { tot, refresh }
+  useEffect(()=>{ refresh().catch(()=>{}) }, [])
+
+  const totals = useMemo(()=>{
+    const totalSales = sales.reduce((s,r)=>s + Number(r.total||0), 0)
+    const totalExpenses = expenses.reduce((s,r)=>s + Number(r.amount||0), 0)
+    return { totalSales, totalExpenses, netProfit: totalSales - totalExpenses }
+  }, [sales, expenses])
+
+  return { sales, expenses, totals, refresh }
 }
 
 export default function OverviewPage() {
   const [range, setRange] = useState('day')   // day | month | year | custom
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
-  const [customData, setCustomData] = useState([])
+  const [from, setFrom]   = useState('')
+  const [to, setTo]       = useState('')
 
-  const { tot, refresh } = useOverviewTotals()
+  const { sales, expenses, totals, refresh } = useOverviewData()
 
-  const hasRealTotals = (tot.totalSales>0) || (tot.totalExpenses>0) || (tot.netProfit>0)
-  const dataset = range === 'custom' ? customData : (hasRealTotals ? DATA[range] : [])
+  // بناء بيانات المخطط من البيانات الحقيقية فقط (لا MocK)
+  const dataset = useMemo(()=>{
+    if (!sales.length && !expenses.length) return []
 
-  const totalsFromDataset = useMemo(() => {
-    const s = dataset.reduce((a,b)=>a+b.sales,0)
-    const e = dataset.reduce((a,b)=>a+b.expenses,0)
-    const n = dataset.reduce((a,b)=>a+b.net,0)
-    return { s, e, n }
-  }, [dataset])
+    const now = new Date()
+    const todayStart = startOfDay(now)
+    const todayEnd   = endOfDay(now)
 
-  function applyCustom() {
-    try {
-      const start = new Date(from)
-      const end = new Date(to)
-      if (isNaN(start) || isNaN(end) || start > end) { setCustomData([]); return }
-      const days = Math.ceil((end - start) / (1000*60*60*24)) + 1
-      setCustomData(Array.from({ length: days }).map((_, idx) => {
-        const d = new Date(start.getTime() + idx*24*60*60*1000)
-        const seed = (d.getMonth()+1) * (d.getDate()+7)
-        const sales = 12000 + seed * 150
-        const expenses = 6000 + seed * 90
-        return { label: d.toISOString().slice(0,10), sales, expenses, net: sales - expenses }
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    const monthEnd   = endOfDay(new Date(now.getFullYear(), now.getMonth()+1, 0))
+
+    const yearStart  = new Date(now.getFullYear(), 0, 1)
+    const yearEnd    = endOfDay(new Date(now.getFullYear(), 11, 31))
+
+    let buckets = []
+
+    if (range === 'day') {
+      // 24 bucket (0..23)
+      const bSales = Array(24).fill(0)
+      const bExp   = Array(24).fill(0)
+      sales.forEach(s=>{
+        const t = new Date(s.createdAt)
+        if (t >= todayStart && t <= todayEnd) bSales[t.getHours()] += Number(s.total||0)
+      })
+      expenses.forEach(e=>{
+        const t = new Date(e.date)
+        if (t >= todayStart && t <= todayEnd) bExp[t.getHours()] += Number(e.amount||0)
+      })
+      buckets = Array.from({length:24}).map((_,h)=>({
+        label: `${h}:00`,
+        sales: bSales[h],
+        expenses: bExp[h],
+        net: bSales[h]-bExp[h],
       }))
-      setRange('custom')
-    } catch { setCustomData([]) }
-  }
+    }
+
+    if (range === 'month') {
+      const days = rangeDays(monthStart, monthEnd)
+      const dayIdx = Object.fromEntries(days.map((d,i)=>[fmtDay(d), i]))
+      const bSales = Array(days.length).fill(0)
+      const bExp   = Array(days.length).fill(0)
+      sales.forEach(s=>{
+        const k = fmtDay(s.createdAt)
+        if (k in dayIdx) bSales[dayIdx[k]] += Number(s.total||0)
+      })
+      expenses.forEach(e=>{
+        const k = fmtDay(e.date)
+        if (k in dayIdx) bExp[dayIdx[k]] += Number(e.amount||0)
+      })
+      buckets = days.map((d,i)=>({
+        label: fmtDay(d),
+        sales: bSales[i],
+        expenses: bExp[i],
+        net: bSales[i]-bExp[i],
+      }))
+    }
+
+    if (range === 'year') {
+      const bSales = Array(12).fill(0)
+      const bExp   = Array(12).fill(0)
+      sales.forEach(s=>{
+        const t = new Date(s.createdAt)
+        if (t >= yearStart && t <= yearEnd) bSales[t.getMonth()] += Number(s.total||0)
+      })
+      expenses.forEach(e=>{
+        const t = new Date(e.date)
+        if (t >= yearStart && t <= yearEnd) bExp[t.getMonth()] += Number(e.amount||0)
+      })
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+      buckets = months.map((m,i)=>({ label:m, sales:bSales[i], expenses:bExp[i], net:bSales[i]-bExp[i] }))
+    }
+
+    if (range === 'custom') {
+      const f = from ? startOfDay(new Date(from)) : null
+      const t = to   ? endOfDay(new Date(to))     : null
+      if (!f || !t || isNaN(f) || isNaN(t) || f>t) return []
+      const days = rangeDays(f,t)
+      const dayIdx = Object.fromEntries(days.map((d,i)=>[fmtDay(d), i]))
+      const bSales = Array(days.length).fill(0)
+      const bExp   = Array(days.length).fill(0)
+      sales.forEach(s=>{ const k=fmtDay(s.createdAt); if (k in dayIdx) bSales[dayIdx[k]] += Number(s.total||0) })
+      expenses.forEach(e=>{ const k=fmtDay(e.date);    if (k in dayIdx) bExp[dayIdx[k]]   += Number(e.amount||0) })
+      buckets = days.map((d,i)=>({ label:fmtDay(d), sales:bSales[i], expenses:bExp[i], net:bSales[i]-bExp[i] }))
+    }
+
+    return buckets
+  }, [range, from, to, sales, expenses])
 
   return (
     <div className="space-y-6">
-      {/* Summary cards — الآن من API أو من fallback */}
+      {/* Summary cards — من بيانات حقيقية فقط */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="grid gap-4 grid-cols-1 md:grid-cols-3 flex-1">
-          <div className="bg-elev p-4"><div className="card-title">Total Sales</div><div className="card-value mt-1">{K(tot.totalSales)}</div></div>
-          <div className="bg-elev p-4"><div className="card-title">Expenses</div><div className="card-value mt-1">{K(tot.totalExpenses)}</div></div>
-          <div className="bg-elev p-4"><div className="card-title">Net Profit</div><div className="card-value mt-1">{K(tot.netProfit)}</div></div>
+          <div className="bg-elev p-4"><div className="card-title">Total Sales</div><div className="card-value mt-1">{K(totals.totalSales)}</div></div>
+          <div className="bg-elev p-4"><div className="card-title">Expenses</div><div className="card-value mt-1">{K(totals.totalExpenses)}</div></div>
+          <div className="bg-elev p-4"><div className="card-title">Net Profit</div><div className="card-value mt-1">{K(totals.netProfit)}</div></div>
         </div>
         <button className="btn" onClick={refresh}>تحديث</button>
       </div>
@@ -143,7 +171,7 @@ export default function OverviewPage() {
             <div className="mx-2 h-6 w-px bg-line" />
             <input type="date" className="rounded-xl border border-line px-3 py-2" value={from} onChange={e=>setFrom(e.target.value)} />
             <input type="date" className="rounded-xl border border-line px-3 py-2" value={to} onChange={e=>setTo(e.target.value)} />
-            <button className="btn btn-primary" onClick={applyCustom}>Apply</button>
+            <button className="btn btn-primary" onClick={()=>setRange('custom')}>Apply</button>
           </div>
         }
       >

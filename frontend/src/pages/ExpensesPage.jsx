@@ -1,4 +1,3 @@
-// frontend/src/pages/ExpensesPage.jsx
 import React, { useMemo, useRef, useState, useEffect } from 'react'
 import Section from '../components/Section'
 import Table from '../components/Table'
@@ -6,6 +5,7 @@ import Modal from '../components/Modal'
 import ActionMenu from '../components/ActionMenu'
 import { readExcelRows, mapRowByAliases, exportRowsToExcel } from "../lib/excel"
 
+// تحضير عنوان الـAPI
 const API_ORIG = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 const API_BASE = API_ORIG.replace(/\/api$/, "");
 const url = (p) => `${API_BASE}${p.startsWith('/') ? p : `/${p}`}`;
@@ -39,8 +39,8 @@ export default function ExpensesPage() {
   }, [])
 
   const filt = useMemo(()=>rows.filter(r=>{
-    if (from && r.date.slice(0,10) < from) return false
-    if (to   && r.date.slice(0,10) > to)   return false
+    if (from && String(r.date).slice(0,10) < from) return false
+    if (to   && String(r.date).slice(0,10) > to)   return false
     return true
   }), [rows,from,to])
 
@@ -48,7 +48,7 @@ export default function ExpensesPage() {
 
   const columns = [
     { key:'name',   title:'Name' },
-    { key:'date',   title:'Date' },
+    { key:'date',   title:'Date', render:r=>String(r.date||'').slice(0,10) }, // <-- تاريخ فقط
     { key:'amount', title:'Amount', render:r=>K(r.amount) },
     { key:'notes',  title:'Notes' },
   ]
@@ -61,37 +61,56 @@ export default function ExpensesPage() {
   ], "expenses.xlsx")
 
   function addNew(){
-    setModal({ open: true, edit: { name:'', date: new Date().toISOString().slice(0,10), amount:0, category:'', notes:'' } })
+    setModal({
+      open: true,
+      edit: { name:'', date: new Date().toISOString().slice(0,10), amount:0, category:'', notes:'' }
+    })
   }
 
   async function save(item){
     try {
-      const method = item._id ? 'PUT' : 'POST';
+      const method   = item._id ? 'PUT' : 'POST';
       const endpoint = item._id ? `/api/expenses/${item._id}` : '/api/expenses';
-      const res = await fetch(url(endpoint), { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
+      const res   = await fetch(url(endpoint), {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item),
+      });
       const saved = await res.json();
       if (item._id) setRows(prev => prev.map(p => p._id === item._id ? saved : p));
-      else setRows(prev => [saved, ...prev]);
+      else          setRows(prev => [saved, ...prev]);
       setModal({open:false, edit:null})
-    } catch (e) { alert('Failed to save: ' + e.message) }
+    } catch (e) {
+      alert('Failed to save: ' + e.message)
+    }
   }
 
   async function onImportExcel(e){
-    const f = e.target.files?.[0]; if (!f) return
+    const f = e.target.files?.[0]
+    if (!f) return
     try {
       const rowsX = await readExcelRows(f)
       const norm = rowsX.map(r => mapRowByAliases(r, EXPENSE_ALIASES)).map(r => ({
         _id: r._id || undefined,
         name: r.name || "",
-        date: String(r.date || "").slice(0,10),
+        date: String(r.date || "").slice(0,10),   // تخزين تاريخ فقط
         amount: Number(r.amount || 0),
         notes: r.notes || "",
       }))
-      const res = await fetch(url('/api/expenses/bulk-upsert'), { method:'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: norm }) });
+      const res = await fetch(url('/api/expenses/bulk-upsert'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: norm })
+      });
       if (!res.ok) throw new Error(await res.text());
-      const out = await fetch(url('/api/expenses')); const data = await out.json();
-      setRows(Array.isArray(data)? data : []); e.target.value = ""; alert("Imported & saved.");
-    } catch (err) { alert("Import failed:\n" + err.message) }
+      const out  = await fetch(url('/api/expenses'));
+      const data = await out.json();
+      setRows(Array.isArray(data)? data : []);
+      e.target.value = "";
+      alert("Imported & saved.");
+    } catch (err) {
+      alert("Import failed:\n" + err.message)
+    }
   }
 
   async function uploadReceipt(expenseId, file){
@@ -106,7 +125,8 @@ export default function ExpensesPage() {
   async function syncGoogle(){
     try {
       await fetch(url('/api/expenses/sync/google-csv?mode=mirror'), { method:'POST' });
-      const res = await fetch(url('/api/expenses')); const data = await res.json();
+      const res  = await fetch(url('/api/expenses'));
+      const data = await res.json();
       setRows(Array.isArray(data)? data : []);
       alert('Expenses synced from Google Sheet.');
     } catch (e) { alert('Sync failed:\n' + e.message) }
@@ -122,9 +142,7 @@ export default function ExpensesPage() {
             <input type="date" className="rounded-xl border border-line px-3 py-2" value={to}   onChange={e=>setTo(e.target.value)} />
             <button className="btn" onClick={()=>{setFrom(''); setTo('')}}>Clear</button>
             <button className="btn btn-primary" onClick={addNew}>Add Expense</button>
-
             <button className="btn" onClick={syncGoogle}>Sync Google</button>
-
             <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onImportExcel}/>
             <button className="btn" onClick={()=>fileRef.current?.click()}>Import Excel</button>
             <ActionMenu label="Export" options={[{ label: 'Excel', onClick: exportExcel }]} />
