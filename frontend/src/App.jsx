@@ -11,11 +11,11 @@ import POSPage from './pages/POSPage'
 import ClientsPage from './pages/ClientsPage'
 import SalesPage from './pages/SalesPage'
 
-// الأنيميشن العام للصفحات
+// انتقالات الصفحات
 import { AnimatePresence } from 'framer-motion'
 import PageWrapper from './ui/anim/PageWrapper'
 
-// الخلفية المتحركة الجديدة
+// الخلفية المتحركة
 import AppBackground from './ui/theme/AppBackground'
 
 function RoutedPages() {
@@ -24,52 +24,34 @@ function RoutedPages() {
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<Navigate to="/overview" replace />} />
-        <Route
-          path="/overview"
-          element={<PageWrapper><OverviewPage /></PageWrapper>}
-        />
+        <Route path="/overview" element={<PageWrapper><OverviewPage /></PageWrapper>} />
         <Route
           path="/whatsapp"
           element={
             <PageWrapper>
-              {/* غلاف زجاجي عام لهذه الصفحة */}
+              {/* غلاف زجاجي للصفحة بالكامل */}
               <div className="page-surface whatsapp-page">
                 <WhatsAppPage />
               </div>
             </PageWrapper>
           }
         />
-        <Route
-          path="/products"
-          element={<PageWrapper><ProductsPage /></PageWrapper>}
-        />
-        <Route
-          path="/expenses"
-          element={<PageWrapper><ExpensesPage /></PageWrapper>}
-        />
-        <Route
-          path="/pos"
-          element={<PageWrapper><POSPage /></PageWrapper>}
-        />
+        <Route path="/products" element={<PageWrapper><ProductsPage /></PageWrapper>} />
+        <Route path="/expenses" element={<PageWrapper><ExpensesPage /></PageWrapper>} />
+        <Route path="/pos" element={<PageWrapper><POSPage /></PageWrapper>} />
         <Route
           path="/clients"
           element={
             <PageWrapper>
-              {/* غلاف زجاجي عام لهذه الصفحة */}
+              {/* غلاف زجاجي للصفحة بالكامل */}
               <div className="page-surface clients-page">
                 <ClientsPage />
               </div>
             </PageWrapper>
           }
         />
-        <Route
-          path="/sales"
-          element={<PageWrapper><SalesPage /></PageWrapper>}
-        />
-        <Route
-          path="*"
-          element={<PageWrapper><div className="p-6 text-mute">Not Found</div></PageWrapper>}
-        />
+        <Route path="/sales" element={<PageWrapper><SalesPage /></PageWrapper>} />
+        <Route path="*" element={<PageWrapper><div className="p-6 text-mute">Not Found</div></PageWrapper>} />
       </Routes>
     </AnimatePresence>
   )
@@ -78,7 +60,6 @@ function RoutedPages() {
 export default function App() {
   return (
     <BrowserRouter>
-      {/* الخلفية المتحركة تغطي كل الصفحات */}
       <AppBackground>
         <div className="min-h-screen relative">
           <Layout className="motion-ready">
