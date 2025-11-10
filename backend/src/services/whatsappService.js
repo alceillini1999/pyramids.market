@@ -1,11 +1,20 @@
 const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
 const QRCode = require("qrcode");
-const fs = require("fs");
 
 let sock = null;
 let qrString = null;
 let connected = false;
 let starting = false;
+
+function normalizeMsisdn(msisdn) {
+  // يقبل: "0712...", "+254712...", "254712..."
+  let s = String(msisdn || "").trim();
+  if (!s) return null;
+  s = s.replace(/[^\d+]/g, "");       // أزل أي شيء غير أرقام أو +
+  if (s.startsWith("+")) s = s.slice(1);
+  if (s.startsWith("0")) s = "254" + s.slice(1); // افتراضي كينيا
+  return /^\d{7,15}$/.test(s) ? s : null;
+}
 
 async function start() {
   if (starting) return;
@@ -23,29 +32,13 @@ async function start() {
 
   sock.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("connection.update", async (update) => {
-    const { connection, qr } = update;
-
+  sock.ev.on("connection.update", async ({ connection, qr }) => {
     if (qr) {
       qrString = qr;
-      console.log("\n🔷 Scan this QR to connect WhatsApp:");
-      QRCode.toString(qr, { type: "terminal", small: true }, (err, code) => {
-        if (!err) console.log(code);
-      });
+      try { console.log(await QRCode.toString(qr, { type: "terminal", small: true })); } catch {}
     }
-
-    if (connection === "open") {
-      console.log("✅ WhatsApp connected successfully!");
-      qrString = null;
-      connected = true;
-    }
-
-    if (connection === "close") {
-      connected = false;
-      qrString = null;
-      console.log("❌ Connection closed, restarting in 5s...");
-      setTimeout(() => start(), 5000);
-    }
+    if (connection === "open") { connected = true; qrString = null; }
+    if (connection === "close") { connected = false; qrString = null; setTimeout(() => start(), 5000); }
   });
 
   starting = false;
@@ -59,10 +52,25 @@ async function getQrDataUrl() {
   if (!qrString) return null;
   return await QRCode.toDataURL(qrString);
 }
+function getQrString(){ return qrString || null; }
 
-// ← إضافة بسيطة: إرجاع النص الخام للـQR ليتوافق مع الواجهة
-function getQrString(){
-  return qrString || null;
+async function sendText(to, message, mediaUrl) {
+  if (!sock) await start();
+  if (!connected) throw new Error("WhatsApp not connected yet");
+
+  const msisdn = normalizeMsisdn(to);
+  if (!msisdn) throw new Error("Invalid phone number");
+
+  const jid = `${msisdn}@s.whatsapp.net`;
+
+  const content = {};
+  if (mediaUrl) content.image = { url: mediaUrl };
+  if (message)  content.caption = message;
+  // لو لا صورة، أرسل نصًا فقط:
+  if (!mediaUrl) { content.text = message || ""; }
+
+  const r = await sock.sendMessage(jid, content);
+  return { ok: true, id: r?.key?.id || null };
 }
 
-module.exports = { start, getStatus, getQrDataUrl, getQrString };
+module.exports = { start, getStatus, getQrDataUrl, getQrString, sendText };

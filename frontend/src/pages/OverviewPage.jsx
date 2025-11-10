@@ -39,25 +39,36 @@ function makeCustomData(from, to) {
   } catch { return [] }
 }
 
+// ← هوك صغيرة لجلب الإجماليات مع زر تحديث
+function useOverviewTotals(){
+  const [apiTotals, setApiTotals] = useState({ totalSales: 0, totalExpenses: 0, netProfit: 0 })
+  const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/,"")
+
+  const fetchTotals = async ()=>{
+    try {
+      const r = await fetch(`${API_BASE}/stats/overview`, { credentials:'include' })
+      const d = await r.json()
+      setApiTotals({
+        totalSales: Number(d?.totalSales || 0),
+        totalExpenses: Number(d?.totalExpenses || 0),
+        netProfit: Number(d?.netProfit || 0),
+      })
+    } catch (e) {
+      console.error("stats/overview failed", e)
+    }
+  }
+
+  useEffect(()=>{ fetchTotals() }, [])
+  return { apiTotals, fetchTotals }
+}
+
 export default function OverviewPage() {
   const [range, setRange] = useState('day')   // day | month | year | custom
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [customData, setCustomData] = useState([])
 
-  // ← إجماليات حقيقية من الـ API
-  const [apiTotals, setApiTotals] = useState({ totalSales: 0, totalExpenses: 0, netProfit: 0 })
-  useEffect(()=>{
-    const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/,"");
-    fetch(`${API_BASE}/stats/overview`, { credentials:'include' })
-      .then(r=>r.json())
-      .then(d=> setApiTotals({
-        totalSales: Number(d?.totalSales || 0),
-        totalExpenses: Number(d?.totalExpenses || 0),
-        netProfit: Number(d?.netProfit || 0),
-      }))
-      .catch(()=>{}) // لا نكسر الصفحة إن فشل
-  },[])
+  const { apiTotals, fetchTotals } = useOverviewTotals()
 
   const dataset = range === 'custom' ? customData : DATA[range]
 
@@ -76,11 +87,15 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      {/* Summary cards — الآن من API */}
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
-        <div className="bg-elev p-4"><div className="card-title">Total Sales</div><div className="card-value mt-1">{K(apiTotals.totalSales)}</div></div>
-        <div className="bg-elev p-4"><div className="card-title">Expenses</div><div className="card-value mt-1">{K(apiTotals.totalExpenses)}</div></div>
-        <div className="bg-elev p-4"><div className="card-title">Net Profit</div><div className="card-value mt-1">{K(apiTotals.netProfit)}</div></div>
+
+      {/* Summary cards — الآن من API + زر تحديث */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-3 flex-1">
+          <div className="bg-elev p-4"><div className="card-title">Total Sales</div><div className="card-value mt-1">{K(apiTotals.totalSales)}</div></div>
+          <div className="bg-elev p-4"><div className="card-title">Expenses</div><div className="card-value mt-1">{K(apiTotals.totalExpenses)}</div></div>
+          <div className="bg-elev p-4"><div className="card-title">Net Profit</div><div className="card-value mt-1">{K(apiTotals.netProfit)}</div></div>
+        </div>
+        <button className="btn" onClick={fetchTotals}>تحديث</button>
       </div>
 
       <Section

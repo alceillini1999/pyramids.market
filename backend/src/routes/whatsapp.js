@@ -2,41 +2,52 @@ const express = require('express');
 const router = express.Router();
 const wa = require('../services/whatsappService');
 
-// Health
+// Health/Init/Status كما لديك
 router.get('/', (_req, res) => res.json({ ok: true, service: 'whatsapp-web' }));
-
-// Init
 router.post('/init', async (_req, res) => { try { await wa.start(); res.json({ ok: true }); } catch (e) { res.status(500).json({ ok: false, error: String(e) }); } });
 router.get('/init',  async (_req, res) => { try { await wa.start(); res.json({ ok: true }); } catch (e) { res.status(500).json({ ok: false, error: String(e) }); } });
+router.get('/status', async (_req, res) => { try { res.json(await wa.getStatus()); } catch (e) { res.status(500).json({ error: String(e) }); } });
 
-// Status
-router.get('/status', async (_req, res) => {
-  try { res.json(await wa.getStatus()); }
-  catch (e) { res.status(500).json({ error: String(e) }); }
-});
-
-// QR  — يعيد كلا الشكلين لتوافق الواجهة
+// QR
 router.get('/qr', async (_req, res) => {
   try {
     const qr = wa.getQrString();
     const dataUrl = await wa.getQrDataUrl();
     if (!qr && !dataUrl) return res.status(204).end();
     res.json({ qr, dataUrl });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// ⬇️ جديد: إرسال مفرد
+router.post('/send', async (req, res) => {
+  try {
+    const { to, message, mediaUrl } = req.body || {};
+    const out = await wa.sendText(to, message, mediaUrl);
+    res.json(out);
   } catch (e) {
-    res.status(500).json({ error: String(e) });
+    res.status(400).json({ ok:false, error: String(e.message || e) });
   }
 });
 
-router.get('/qr-image', async (_req, res) => {
+// ⬇️ جديد: إرسال متعدد
+router.post('/send-bulk', async (req, res) => {
   try {
-    const dataUrl = await wa.getQrDataUrl();
-    if (!dataUrl) return res.status(404).send('No QR yet');
-    const base64 = String(dataUrl).split(',')[1];
-    const buf = Buffer.from(base64, 'base64');
-    res.set('Content-Type', 'image/png');
-    res.send(buf);
-  } catch (e) { res.status(500).send(String(e)); }
+    const { to = [], message, mediaUrl } = req.body || {};
+    if (!Array.isArray(to) || !to.length) throw new Error("No recipients");
+
+    const results = [];
+    for (const phone of to) {
+      try {
+        const r = await wa.sendText(phone, message, mediaUrl);
+        results.push({ phone, ok: true, id: r.id || null });
+      } catch (err) {
+        results.push({ phone, ok: false, error: String(err.message || err) });
+      }
+    }
+    res.json({ ok: true, count: results.length, results });
+  } catch (e) {
+    res.status(400).json({ ok:false, error: String(e.message || e) });
+  }
 });
 
-// (باقي المسارات كما هي؛ لن نلمس send-bulk / pairing / reset لتفادي أي تعطل غير مطلوب)
 module.exports = router;
