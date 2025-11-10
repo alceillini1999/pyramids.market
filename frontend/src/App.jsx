@@ -15,6 +15,9 @@ import SalesPage from './pages/SalesPage'
 import { AnimatePresence } from 'framer-motion'
 import PageWrapper from './ui/anim/PageWrapper'
 
+// الخلفية المتحركة الجديدة
+import AppBackground from './ui/theme/AppBackground'
+
 function RoutedPages() {
   const location = useLocation()
   return (
@@ -37,12 +40,14 @@ function RoutedPages() {
 export default function App() {
   return (
     <BrowserRouter>
-      {/* لا فوتر — الخلفية المتحركة تغطي الصفحة بالكامل */}
-      <div className="min-h-screen relative">
-        <Layout className="motion-ready">
-          <RoutedPages />
-        </Layout>
-      </div>
+      {/* الخلفية المتحركة تغطي كل الصفحات */}
+      <AppBackground>
+        <div className="min-h-screen relative">
+          <Layout className="motion-ready">
+            <RoutedPages />
+          </Layout>
+        </div>
+      </AppBackground>
     </BrowserRouter>
   )
 }

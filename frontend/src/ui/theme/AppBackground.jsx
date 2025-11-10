@@ -1,88 +1,25 @@
-import React, { useEffect } from "react";
+import React from "react";
 
-/** خلفية متحركة تغطي كل الصفحات + وسم body بكلاس theme-pyramids */
+/**
+ * خلفية متحركة بألوان اللوجو (Navy/Brown/Gold) تغطي الشاشة كلها.
+ * ثابتة خلف كل العناصر بدون التأثير على المحتوى.
+ */
 export default function AppBackground({ children }) {
-  useEffect(() => {
-    document.documentElement.style.background = "transparent";
-    document.body.classList.add("theme-pyramids");
-    const style = document.createElement("style");
-    style.innerHTML = `
-      @keyframes gradientFlow {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-      }
-      @keyframes blobA { 0%{transform:rotate(0)} 50%{transform:rotate(180deg)} 100%{transform:rotate(360deg)} }
-      @keyframes blobB { 0%{transform:rotate(0)} 50%{transform:rotate(-180deg)} 100%{transform:rotate(-360deg)} }
-      @keyframes goldSheen { 0%,100%{opacity:.18;filter:blur(30px)} 50%{opacity:.28;filter:blur(36px)} }
-    `;
-    document.head.appendChild(style);
-    return () => {
-      document.body.classList.remove("theme-pyramids");
-    };
-  }, []);
-
   return (
-    <div className="min-h-screen relative" style={{ backgroundColor: "transparent" }}>
-      {/* طبقات الخلفية ثابتة لتغطي كامل الشاشة أثناء التمرير */}
+    <div className="relative min-h-screen">
+      {/* طبقة الخلفية المتحركة */}
       <div
         aria-hidden
-        className="fixed inset-0 -z-30"
+        className="pointer-events-none fixed inset-0 -z-10"
         style={{
           background:
-            "linear-gradient(-45deg, #1A120B, #2B1D12, #F2C041, #8B5E3C, #1A120B)",
-          backgroundSize: "400% 400%",
-          animation: "gradientFlow 5s ease-in-out infinite",
-          filter: "saturate(115%) contrast(105%)",
+            "linear-gradient(-45deg, #0A1931 0%, #1E3A8A 18%, #6B4A2B 38%, #B08946 58%, #D4AF37 78%, #F4C95D 100%)",
+          backgroundSize: "300% 300%",
+          animation: "brandGradient 16s ease-in-out infinite",
+          filter: "saturate(1.05)",
         }}
       />
-      <div aria-hidden className="fixed inset-0 -z-20 pointer-events-none">
-        <div
-          style={{
-            position: "absolute",
-            top: "10%",
-            left: "6%",
-            width: "60vmax",
-            height: "60vmax",
-            borderRadius: "50%",
-            background:
-              "radial-gradient(40% 40% at 50% 50%, rgba(242,192,65,0.18), transparent 70%)",
-            mixBlendMode: "screen",
-            animation: "blobA 14s linear infinite",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            bottom: "10%",
-            right: "10%",
-            width: "55vmax",
-            height: "55vmax",
-            borderRadius: "50%",
-            background:
-              "radial-gradient(40% 40% at 50% 50%, rgba(139,94,60,0.22), transparent 70%)",
-            mixBlendMode: "screen",
-            animation: "blobB 18s linear infinite",
-          }}
-        />
-      </div>
-      <div
-        aria-hidden
-        className="fixed left-1/2 -translate-x-1/2 -z-10 pointer-events-none"
-        style={{
-          top: "-6rem",
-          width: "120vmax",
-          height: "18rem",
-          background:
-            "radial-gradient(80% 100% at 50% 100%, rgba(242,192,65,0.30) 0%, rgba(249,115,22,0.12) 40%, transparent 70%)",
-          mixBlendMode: "screen",
-          animation: "goldSheen 5.5s ease-in-out infinite",
-          filter: "blur(26px)",
-        }}
-      />
-
-      {/* محتوى التطبيق */}
-      <div className="relative z-10">{children}</div>
+      {children}
     </div>
   );
 }

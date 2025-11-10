@@ -2,65 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
-/* =========================================================
-   Animated Background — Navy / Brown / Gold (logo colors)
-   أسلوب نفس فكرة الفيديو: تدرج واسع يتحرّك ببطء
-   ========================================================= */
-html, body, #root {
-  height: 100%;
-}
-
-body {
-  /* نجعل الخلفية الحقيقية شفافة لأننا سنرسم الأنيميشن على ::before */
-  background: transparent !important;
-}
-
-/* طبقة الخلفية المتحركة خلف كل شيء */
-body::before{
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  /* تدرج واسع مع ألوان الشعار */
-  background: linear-gradient(
-    -45deg,
-    #0A1931 0%,
-    #1E3A8A 18%,
-    #6B4A2B 38%,
-    #B08946 58%,
-    #D4AF37 78%,
-    #F4C95D 100%
-  );
-  background-size: 300% 300%;
-  animation: brandGradient 16s ease-in-out infinite;
-  /* نعومة خفيفة */
-  filter: saturate(1.05);
-}
-
+/* ===== حركة التدرّج — تستعمل داخل AppBackground.jsx عبر keyframes ===== */
 @keyframes brandGradient {
   0%   { background-position:   0% 50%; }
   50%  { background-position: 100% 50%; }
   100% { background-position:   0% 50%; }
 }
 
-/* =========================================================
-   Glass Dark surfaces (Sidebar / Topbar / Cards / Tables)
-   بدون تغيير ألوان النصوص أو الأزرار.
-   تم تخفيض الشفافية لتظل النصوص الداكنة مقروءة.
-   ========================================================= */
+/* ===== Glass Dark للـ Sidebar / Topbar / Main containers ===== */
 :root{
-  --glass-alpha: 0.18;              /* شفافية الطبقات */
+  --glass-alpha: 0.20;                 /* يمكنك ضبطها 0.15 – 0.30 */
   --glass-bg: rgba(0,0,0,var(--glass-alpha));
-  --glass-brd: rgba(255,255,255,0.08);
+  --glass-brd: rgba(255,255,255,0.10);
   --glass-blur: 6px;
 }
 
 /* Sidebar */
-aside,
-.sidebar,
-.sidebar-container,
-.app-sidebar,
-[data-role="sidebar"] {
+aside, .sidebar, .sidebar-container, .app-sidebar, [data-role="sidebar"] {
   background: var(--glass-bg) !important;
   border-right: 1px solid var(--glass-brd);
   backdrop-filter: blur(var(--glass-blur));
@@ -68,27 +26,19 @@ aside,
 }
 
 /* Top Bar / Header */
-header,
-.topbar,
-.app-header,
-[data-role="topbar"] {
+header, .topbar, .app-header, [data-role="topbar"] {
   background: var(--glass-bg) !important;
   border-bottom: 1px solid var(--glass-brd);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
-/* Main containers / cards / table wrappers */
+/* Main Content / Cards / Tables */
 .bg-elev,
-.card,
-.content-card,
-.table-wrapper,
-.table-container,
-section.content,
-main .container,
-main > .wrapper,
-.recharts-wrapper,           /* كي لا يأخذ خلفية صلبة */
-.card, .panel, .box {
+.card, .content-card, .panel, .box,
+.table-wrapper, .table-container,
+section.content, main .container, main > .wrapper,
+.recharts-wrapper {
   background: var(--glass-bg) !important;
   border: 1px solid var(--glass-brd);
   border-radius: 16px;
@@ -96,15 +46,15 @@ main > .wrapper,
   -webkit-backdrop-filter: blur(var(--glass-blur));
   box-shadow:
     0 6px 24px rgba(0,0,0,0.22),
-    inset 0 1px 0 rgba(255,255,255,0.04);
+    inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
-/* إزالة أي خلفيات صلبة قد تأتي من Tailwind/كلاسات جاهزة */
+/* إزالة الخلفيات البيضاء الافتراضية التي قد تغطي التدرج */
 .bg-white, .bg-gray-50, .bg-gray-100, .bg-slate-50, .bg-slate-100 {
   background: transparent !important;
 }
 
-/* لا نغيّر ألوان نصوص/أزرار — نُبقي ما لديك كما هو */
+/* إبقاء الأزرار والنصوص كما هي (لا تغييرات ألوان) */
 .badge { @apply inline-flex items-center rounded-full border border-line px-2 py-0.5 text-xs text-mute bg-white; }
 .btn { @apply inline-flex items-center gap-2 rounded-xl px-3 py-2 border border-line bg-white text-ink hover:shadow-soft transition; }
 .btn-primary { @apply bg-gold text-black border-gold hover:opacity-95; }
@@ -112,5 +62,7 @@ main > .wrapper,
 .card-value { @apply text-2xl font-semibold text-ink; }
 .link { @apply text-cocoa hover:opacity-80 underline-offset-4 hover:underline; }
 
-/* إزالة أي بقايا لفوتر سابق */
-.pm-footer, footer.pm-footer { display: none !important; }
+/* إخفاء أي فوتر قديم داخل الواجهة */
+footer, .pm-footer, footer.pm-footer, [data-role="footer"] {
+  display: none !important;
+}
