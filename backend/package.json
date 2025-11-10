@@ -20,6 +20,9 @@
     "mongoose": "^8.5.0",
     "multer": "^1.4.5-lts.1",
     "qrcode": "^1.5.3",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+
+    // ✅ مضافة حديثاً لتكامل Google Sheets
+    "googleapis": "^133.0.0"
   }
 }
