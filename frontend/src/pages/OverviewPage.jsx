@@ -1,6 +1,8 @@
+// src/pages/OverviewPage.jsx
 import React, { useEffect, useMemo, useState } from 'react'
 import Section from '../components/Section'
 import ChartSales from '../components/ChartSales'
+import OverviewNeon from '../ui/theme/OverviewNeon'   // ✨ الغلاف الجديد
 
 const K = n => `KSh ${Number(n).toLocaleString('en-KE')}`
 
@@ -29,7 +31,7 @@ function useOverviewData(){
   const [expenses, setExpenses] = useState([])
 
   const refresh = async ()=>{
-    // sales (نطلب 1000 عنصر كحد أقصى للعرض)
+    // sales
     const sRes = await fetch(url('/api/sales?page=1&limit=1000'), { credentials:'include' })
     const sJson = await sRes.json()
     const sRows = Array.isArray(sJson) ? sJson : (Array.isArray(sJson.rows) ? sJson.rows : [])
@@ -59,7 +61,7 @@ export default function OverviewPage() {
 
   const { sales, expenses, totals, refresh } = useOverviewData()
 
-  // بناء بيانات المخطط من البيانات الحقيقية فقط (لا MocK)
+  // بناء بيانات المخطط من البيانات الحقيقية فقط
   const dataset = useMemo(()=>{
     if (!sales.length && !expenses.length) return []
 
@@ -76,7 +78,6 @@ export default function OverviewPage() {
     let buckets = []
 
     if (range === 'day') {
-      // 24 bucket (0..23)
       const bSales = Array(24).fill(0)
       const bExp   = Array(24).fill(0)
       sales.forEach(s=>{
@@ -147,37 +148,50 @@ export default function OverviewPage() {
     return buckets
   }, [range, from, to, sales, expenses])
 
+  // ✅ تغليف المحتوى الأصلي داخل الثيم الجديد فقط
   return (
-    <div className="space-y-6">
-      {/* Summary cards — من بيانات حقيقية فقط */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="grid gap-4 grid-cols-1 md:grid-cols-3 flex-1">
-          <div className="bg-elev p-4"><div className="card-title">Total Sales</div><div className="card-value mt-1">{K(totals.totalSales)}</div></div>
-          <div className="bg-elev p-4"><div className="card-title">Expenses</div><div className="card-value mt-1">{K(totals.totalExpenses)}</div></div>
-          <div className="bg-elev p-4"><div className="card-title">Net Profit</div><div className="card-value mt-1">{K(totals.netProfit)}</div></div>
-        </div>
-        <button className="btn" onClick={refresh}>تحديث</button>
-      </div>
-
-      <Section
-        title="Sales vs Expenses vs Net"
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {['day','month','year'].map(v=>(
-              <button key={v} className={`btn ${range===v ? 'btn-primary' : ''}`} onClick={()=>setRange(v)}>
-                {v === 'day' ? 'Today' : v === 'month' ? 'This Month' : 'This Year'}
-              </button>
-            ))}
-            <div className="mx-2 h-6 w-px bg-line" />
-            <input type="date" className="rounded-xl border border-line px-3 py-2" value={from} onChange={e=>setFrom(e.target.value)} />
-            <input type="date" className="rounded-xl border border-line px-3 py-2" value={to} onChange={e=>setTo(e.target.value)} />
-            <button className="btn btn-primary" onClick={()=>setRange('custom')}>Apply</button>
+    <OverviewNeon
+      stats={{
+        balance: totals.totalSales,        // لإظهار قيمة واضحة في الهيدر
+        investment: totals.totalSales,
+        totalGain: Math.max(totals.netProfit, 0),
+        totalLoss: Math.max(-totals.netProfit, 0),
+      }}
+      chartData={dataset.map(d => ({ label: d.label, value: d.net }))} // نعرض صافي الربح في الرسم العلوي
+      actions={{ onDeposit: () => {}, onWithdraw: () => {} }}
+      rightPanel={{ portfolioName: 'Pyramids Mart', value: totals.totalSales, holders: 50 }}
+    >
+      {/* === المحتوى الأصلي كما هو للحفاظ على كل الوظائف === */}
+      <div className="space-y-6">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-3 flex-1">
+            <div className="bg-elev p-4"><div className="card-title">Total Sales</div><div className="card-value mt-1">{K(totals.totalSales)}</div></div>
+            <div className="bg-elev p-4"><div className="card-title">Expenses</div><div className="card-value mt-1">{K(totals.totalExpenses)}</div></div>
+            <div className="bg-elev p-4"><div className="card-title">Net Profit</div><div className="card-value mt-1">{K(totals.netProfit)}</div></div>
           </div>
-        }
-      >
-        {dataset.length ? <ChartSales data={dataset} /> :
-          <div className="h-64 grid place-items-center text-mute">No data for selected range</div>}
-      </Section>
-    </div>
+          <button className="btn" onClick={refresh}>تحديث</button>
+        </div>
+
+        <Section
+          title="Sales vs Expenses vs Net"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              {['day','month','year'].map(v=>(
+                <button key={v} className={`btn ${range===v ? 'btn-primary' : ''}`} onClick={()=>setRange(v)}>
+                  {v === 'day' ? 'Today' : v === 'month' ? 'This Month' : 'This Year'}
+                </button>
+              ))}
+              <div className="mx-2 h-6 w-px bg-line" />
+              <input type="date" className="rounded-xl border border-line px-3 py-2" value={from} onChange={e=>setFrom(e.target.value)} />
+              <input type="date" className="rounded-xl border border-line px-3 py-2" value={to} onChange={e=>setTo(e.target.value)} />
+              <button className="btn btn-primary" onClick={()=>setRange('custom')}>Apply</button>
+            </div>
+          }
+        >
+          {dataset.length ? <ChartSales data={dataset} /> :
+            <div className="h-64 grid place-items-center text-mute">No data for selected range</div>}
+        </Section>
+      </div>
+    </OverviewNeon>
   )
 }
