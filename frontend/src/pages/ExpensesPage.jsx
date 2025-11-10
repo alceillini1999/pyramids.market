@@ -1,3 +1,4 @@
+// frontend/src/pages/ExpensesPage.jsx
 import React, { useMemo, useRef, useState, useEffect } from 'react'
 import Section from '../components/Section'
 import Table from '../components/Table'
@@ -5,7 +6,6 @@ import Modal from '../components/Modal'
 import ActionMenu from '../components/ActionMenu'
 import { readExcelRows, mapRowByAliases, exportRowsToExcel } from "../lib/excel"
 
-// تحضير عنوان الـAPI
 const API_ORIG = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 const API_BASE = API_ORIG.replace(/\/api$/, "");
 const url = (p) => `${API_BASE}${p.startsWith('/') ? p : `/${p}`}`;
@@ -50,7 +50,7 @@ export default function ExpensesPage() {
     { key:'name',   title:'Name' },
     { key:'date',   title:'Date' },
     { key:'amount', title:'Amount', render:r=>K(r.amount) },
-    { key:'notes',   title:'Notes' },
+    { key:'notes',  title:'Notes' },
   ]
 
   const exportExcel = () => exportRowsToExcel(filt, [
@@ -61,33 +61,23 @@ export default function ExpensesPage() {
   ], "expenses.xlsx")
 
   function addNew(){
-    setModal({
-      open: true,
-      edit: { name:'', date: new Date().toISOString().slice(0,10), amount:0, category:'', notes:'' }
-    })
+    setModal({ open: true, edit: { name:'', date: new Date().toISOString().slice(0,10), amount:0, category:'', notes:'' } })
   }
 
   async function save(item){
     try {
       const method = item._id ? 'PUT' : 'POST';
       const endpoint = item._id ? `/api/expenses/${item._id}` : '/api/expenses';
-      const res = await fetch(url(endpoint), {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(item),
-      });
+      const res = await fetch(url(endpoint), { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
       const saved = await res.json();
       if (item._id) setRows(prev => prev.map(p => p._id === item._id ? saved : p));
       else setRows(prev => [saved, ...prev]);
       setModal({open:false, edit:null})
-    } catch (e) {
-      alert('Failed to save: ' + e.message)
-    }
+    } catch (e) { alert('Failed to save: ' + e.message) }
   }
 
   async function onImportExcel(e){
-    const f = e.target.files?.[0]
-    if (!f) return
+    const f = e.target.files?.[0]; if (!f) return
     try {
       const rowsX = await readExcelRows(f)
       const norm = rowsX.map(r => mapRowByAliases(r, EXPENSE_ALIASES)).map(r => ({
@@ -97,30 +87,29 @@ export default function ExpensesPage() {
         amount: Number(r.amount || 0),
         notes: r.notes || "",
       }))
-      const res = await fetch(url('/api/expenses/bulk-upsert'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: norm })
-      });
+      const res = await fetch(url('/api/expenses/bulk-upsert'), { method:'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: norm }) });
       if (!res.ok) throw new Error(await res.text());
-      const out = await fetch(url('/api/expenses'));
-      const data = await out.json();
-      setRows(Array.isArray(data)? data : []);
-      e.target.value = "";
-      alert("Imported & saved.");
-    } catch (err) {
-      alert("Import failed:\n" + err.message)
-    }
+      const out = await fetch(url('/api/expenses')); const data = await out.json();
+      setRows(Array.isArray(data)? data : []); e.target.value = ""; alert("Imported & saved.");
+    } catch (err) { alert("Import failed:\n" + err.message) }
   }
 
   async function uploadReceipt(expenseId, file){
-    const fd = new FormData();
-    fd.append('file', file);
+    const fd = new FormData(); fd.append('file', file);
     const res = await fetch(url(`/api/expenses/${expenseId}/receipt`), { method:'POST', body: fd });
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
     setRows(prev => prev.map(r => r._id===expenseId ? {...r, receiptUrl: data.receiptUrl} : r));
     alert('Receipt uploaded.');
+  }
+
+  async function syncGoogle(){
+    try {
+      await fetch(url('/api/expenses/sync/google-csv?mode=mirror'), { method:'POST' });
+      const res = await fetch(url('/api/expenses')); const data = await res.json();
+      setRows(Array.isArray(data)? data : []);
+      alert('Expenses synced from Google Sheet.');
+    } catch (e) { alert('Sync failed:\n' + e.message) }
   }
 
   return (
@@ -134,13 +123,9 @@ export default function ExpensesPage() {
             <button className="btn" onClick={()=>{setFrom(''); setTo('')}}>Clear</button>
             <button className="btn btn-primary" onClick={addNew}>Add Expense</button>
 
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".xlsx,.xls"
-              className="hidden"
-              onChange={onImportExcel}
-            />
+            <button className="btn" onClick={syncGoogle}>Sync Google</button>
+
+            <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onImportExcel}/>
             <button className="btn" onClick={()=>fileRef.current?.click()}>Import Excel</button>
             <ActionMenu label="Export" options={[{ label: 'Excel', onClick: exportExcel }]} />
           </div>
@@ -148,17 +133,10 @@ export default function ExpensesPage() {
       >
         <Table columns={[
           ...columns,
-          {
-            key:'__upload',
-            title:'Receipt',
+          { key:'__upload', title:'Receipt',
             render:r=>(
               <label className="btn">
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="hidden"
-                  onChange={(e)=> e.target.files?.[0] && uploadReceipt(r._id, e.target.files[0])}
-                />
+                <input type="file" accept="image/*,.pdf" className="hidden" onChange={(e)=> e.target.files?.[0] && uploadReceipt(r._id, e.target.files[0])}/>
                 Upload
               </label>
             )
@@ -172,33 +150,20 @@ export default function ExpensesPage() {
           <div className="grid grid-cols-2 gap-3">
             <label className="text-sm">
               <span className="block text-mute mb-1">Name</span>
-              <input className="border border-line rounded-xl px-3 py-2 w-full"
-                     value={modal.edit.name}
-                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, name:e.target.value}}))}/>
+              <input className="border border-line rounded-xl px-3 py-2 w-full" value={modal.edit.name} onChange={e=>setModal(m=>({...m, edit:{...m.edit, name:e.target.value}}))}/>
             </label>
-
             <label className="text-sm">
               <span className="block text-mute mb-1">Date</span>
-              <input type="date" className="border border-line rounded-xl px-3 py-2 w-full"
-                     value={modal.edit.date}
-                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, date:e.target.value}}))}/>
+              <input type="date" className="border border-line rounded-xl px-3 py-2 w-full" value={modal.edit.date} onChange={e=>setModal(m=>({...m, edit:{...m.edit, date:e.target.value}}))}/>
             </label>
-
             <label className="text-sm">
               <span className="block text-mute mb-1">Amount</span>
-              <input className="border border-line rounded-xl px-3 py-2 w-full"
-                     value={modal.edit.amount}
-                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, amount:e.target.value}}))}/>
+              <input className="border border-line rounded-xl px-3 py-2 w-full" value={modal.edit.amount} onChange={e=>setModal(m=>({...m, edit:{...m.edit, amount:e.target.value}}))}/>
             </label>
-
             <label className="col-span-2 text-sm">
               <span className="block text-mute mb-1">Notes</span>
-              <input className="border border-line rounded-xl px-3 py-2 w-full"
-                     placeholder="Optional note"
-                     value={modal.edit.notes}
-                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, notes:e.target.value}}))}/>
+              <input className="border border-line rounded-xl px-3 py-2 w-full" placeholder="Optional note" value={modal.edit.notes} onChange={e=>setModal(m=>({...m, edit:{...m.edit, notes:e.target.value}}))}/>
             </label>
-
             <div className="col-span-2 flex gap-2 justify-end">
               <button className="btn" onClick={()=>setModal({open:false, edit:null})}>Cancel</button>
               <button className="btn btn-primary" onClick={()=>save(modal.edit)}>Save</button>

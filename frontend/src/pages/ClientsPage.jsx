@@ -1,100 +1,132 @@
-import { useEffect, useState } from 'react'
+// frontend/src/pages/ClientsPage.jsx
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import Section from '../components/Section'
+import Table from '../components/Table'
+import ActionMenu from '../components/ActionMenu'
+import { readExcelRows, mapRowByAliases, exportRowsToExcel } from "../lib/excel"
 
-// تحضير عنوان الـAPI
 const API_ORIG = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 const API_BASE = API_ORIG.replace(/\/api$/, "");
 const url = (p) => `${API_BASE}${p.startsWith('/') ? p : `/${p}`}`;
 
-export default function SalesPage(){
-  const [rows,setRows] = useState([])
-  const [count,setCount] = useState(0)
-  const [q,setQ] = useState('')
-  const [page,setPage] = useState(1)
-  const [details,setDetails] = useState(null)
+const CLIENT_ALIASES = {
+  name: ["name", "client", "customer", "client name"],
+  phone: ["phone", "mobile", "msisdn", "tel", "Phone"],
+  countryCode: ["countrycode", "cc", "CountryCode", "Country Code"],
+  area: ["area"],
+  notes: ["notes", "note"],
+  tags: ["tags", "labels"],
+  orders: ["orders", "ordercount", "total orders"],
+  lastOrder: ["lastorder", "last order", "lastorderdate"],
+  points: ["points", "loyalty", "score"],
+}
+
+function onlyDigits(s){ return String(s ?? "").replace(/[^0-9]/g, ""); }
+
+async function api(p, opts={}) {
+  const res = await fetch(url(p), { mode:'cors', credentials:'include', ...opts });
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText} @ ${url(p)}\n` + await res.text().catch(()=>"(no body)"));
+  const ct = res.headers.get('content-type') || '';
+  return ct.includes('json') ? res.json() : res.text();
+}
+
+export default function ClientsPage() {
+  const [rows, setRows] = useState([])
+  const [q, setQ]       = useState('')
+  const fileRef = useRef(null)
 
   useEffect(()=>{
-    fetch(url('/api/sales') + `?page=${page}&limit=20&q=${encodeURIComponent(q)}`, { credentials:'include' })
-      .then(r=>r.json())
-      .then(d=>{ setRows(d.rows||[]); setCount(d.count||0); })
-      .catch(()=>{})
-  },[page,q])
+    (async ()=>{
+      try {
+        const out = await api('/api/clients');
+        setRows(Array.isArray(out.data) ? out.data : out);
+      } catch (e) { alert(e.message) }
+    })()
+  }, [])
 
-  async function openDetails(id){
-    const res = await fetch(url(`/api/sales/${id}`), { credentials:'include' })
-    const data = await res.json()
-    setDetails(data)
+  const filtered = useMemo(
+    ()=>rows.filter(r => (r.name || "").toLowerCase().includes(q.toLowerCase()) || (r.phone || "").includes(q)),
+    [rows, q]
+  )
+
+  const columns = [
+    { key: 'name',   title: 'Name' },
+    { key: 'phone',  title: 'Phone' },
+    { key: 'countryCode', title: 'CC' },
+    { key: 'orders', title: 'Orders' },
+    { key: 'lastOrder', title: 'Last Order' },
+    { key: 'points', title: 'Points' },
+  ]
+
+  const exportExcel = () => exportRowsToExcel(filtered, [
+    { key:'name', title:'Name' },
+    { key:'phone', title:'Phone' },
+    { key:'countryCode', title:'CountryCode' },
+    { key:'area', title:'Area' },
+    { key:'notes', title:'Notes' },
+    { key:'tags', title:'Tags' },
+    { key:'orders', title:'Orders' },
+    { key:'lastOrder', title:'Last Order' },
+    { key:'points', title:'Points' },
+  ], "clients.xlsx")
+
+  async function onImportExcel(e){
+    const f = e.target.files?.[0]; if (!f) return
+    try {
+      const rowsX = await readExcelRows(f)
+      const norm = rowsX.map(r => mapRowByAliases(r, CLIENT_ALIASES)).map(r => ({
+        name: r.name || "",
+        phone: String(r.phone || ""),
+        countryCode: onlyDigits(r.countryCode || ""),
+        area: r.area || "",
+        notes: r.notes || "",
+        tags: r.tags || "",
+        orders: Number(r.orders || 0),
+        lastOrder: String(r.lastOrder || ""),
+        points: Number(r.points || 0),
+      }))
+      try {
+        await api('/api/clients/bulk-upsert', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ items: norm }) })
+      } catch {
+        const fd = new FormData(); fd.append('file', f);
+        await api('/api/clients/import/excel', { method:'POST', body: fd })
+      }
+      const out = await api('/api/clients');
+      setRows(Array.isArray(out.data) ? out.data : out);
+      e.target.value = "";
+      alert('Imported & synced.');
+    } catch (err) { alert('Failed to import:\n' + err.message) }
+  }
+
+  async function syncGoogle(){
+    try {
+      await api('/api/clients/sync/google-csv?mode=mirror', { method:'POST' });
+      const out = await api('/api/clients');
+      setRows(Array.isArray(out.data) ? out.data : out);
+      alert('Clients synced from Google Sheet.');
+    } catch (e) { alert('Sync failed:\n' + e.message) }
   }
 
   return (
-    <div className="p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">المبيعات</h1>
-        <input value={q} onChange={e=>{setPage(1); setQ(e.target.value)}} placeholder="ابحث برقم الفاتورة أو اسم العميل" className="border rounded px-3 py-2"/>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50">
-              <th className="p-2">رقم الفاتورة</th>
-              <th className="p-2">العميل</th>
-              <th className="p-2">التاريخ والوقت</th>
-              <th className="p-2">إجمالي الفاتورة</th>
-              <th className="p-2">طريقة الدفع</th>
-              <th className="p-2">الربح</th>
-              <th className="p-2">تفاصيل</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(r=>(
-              <tr key={r._id} className="border-b">
-                <td className="p-2">{r.invoiceNumber}</td>
-                <td className="p-2">{r.clientName || r?.client?.name || ''}</td>
-                <td className="p-2">{r.createdAt ? new Date(r.createdAt).toLocaleString() : ''}</td>
-                <td className="p-2">{Number(r.total||0).toFixed(2)}</td>
-                <td className="p-2">{r.paymentMethod}</td>
-                <td className="p-2">{Number(r.profit||0).toFixed(2)}</td>
-                <td className="p-2">
-                  <button className="px-3 py-1 rounded bg-black text-white" onClick={()=>openDetails(r._id)}>تفاصيل</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {details && (
-        <div className="fixed inset-0 bg-black/40 grid place-items-center" onClick={()=>setDetails(null)}>
-          <div className="bg-white rounded-xl p-4 w-full max-w-2xl" onClick={e=>e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-lg font-semibold">تفاصيل الفاتورة {details.invoiceNumber}</div>
-              <button className="btn" onClick={()=>setDetails(null)}>إغلاق</button>
-            </div>
-            <div className="text-sm text-mute mb-2">
-              العميل: {details.clientName || details?.client?.name || '—'} • التاريخ: {details.createdAt ? new Date(details.createdAt).toLocaleString() : '—'}
-            </div>
-            <table className="w-full text-sm">
-              <thead><tr className="bg-gray-50"><th className="p-2 text-left">الصنف</th><th className="p-2">الكمية</th><th className="p-2">سعر البيع</th><th className="p-2">التكلفة</th><th className="p-2">الإجمالي</th></tr></thead>
-              <tbody>
-                {(details.items||[]).map((it,idx)=>(
-                  <tr key={idx} className="border-b">
-                    <td className="p-2 text-left">{it.name || it?.product?.name || ''}</td>
-                    <td className="p-2 text-center">{it.qty}</td>
-                    <td className="p-2 text-center">{Number(it.price||0).toFixed(2)}</td>
-                    <td className="p-2 text-center">{Number(it.cost||0).toFixed(2)}</td>
-                    <td className="p-2 text-center">{Number(it.subtotal||0).toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="text-right mt-3">
-              <div>إجمالي الفاتورة: <b>{Number(details.total||0).toFixed(2)}</b></div>
-              <div>الربح: <b>{Number(details.profit||0).toFixed(2)}</b></div>
-              <div>طريقة الدفع: <b>{details.paymentMethod}</b></div>
-            </div>
+    <div className="space-y-6">
+      <Section
+        title="Clients"
+        actions={
+          <div className="flex items-center gap-2">
+            <input className="border border-line rounded-xl px-3 py-2" placeholder="Search…" value={q} onChange={e=>setQ(e.target.value)} />
+            <button className="btn" onClick={syncGoogle}>Sync Google</button>
+            <ActionMenu label="Export" options={[{ label: 'Excel', onClick: exportExcel }]} />
+            <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onImportExcel} />
+            <button className="btn" onClick={()=>fileRef.current?.click()}>Import Excel</button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <Table columns={columns} data={filtered} />
+      </Section>
+
+      <Section title="Loyalty & Notes">
+        <div className="text-mute">Purchase history UI placeholder — to connect with backend later.</div>
+      </Section>
     </div>
   )
 }

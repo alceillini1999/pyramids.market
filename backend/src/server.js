@@ -1,8 +1,7 @@
-// ===== تحميل ملف البيئة .env (اختياري) =====
+// backend/src/server.js
 let dotenvLoaded = false;
 try { require('dotenv').config(); dotenvLoaded = true; } catch { console.log('dotenv not found — using host env only'); }
 
-// ===== المكتبات الأساسية =====
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -14,7 +13,7 @@ const bcrypt = require('bcryptjs');
 const app = express();
 app.use(helmet());
 
-/* ===== CORS ===== */
+// CORS
 const defaultAllow = 'https://pyramids-market.onrender.com,https://pyramids-market-site.onrender.com,http://localhost:5173';
 const allowlist = (process.env.CORS_ALLOWLIST || defaultAllow).split(',').map(s => s.trim()).filter(Boolean);
 app.use((req,res,next)=>{ res.setHeader('Vary','Origin'); next(); });
@@ -34,15 +33,15 @@ app.use(cors({
 }));
 app.options('*', cors());
 
-/* ===== JSON ===== */
+// JSON
 app.use(express.json());
 
-/* ===== Health ===== */
+// Health
 app.get('/api/healthz', (req, res) =>
   res.json({ status:'ok', name:'pyramids-mart-backend', dotenvLoaded })
 );
 
-/* ===== Routers ===== */
+// Routers
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/clients', require('./routes/clients'));
 app.use('/api/products', require('./routes/products'));
@@ -53,7 +52,7 @@ app.use('/api/uploads', require('./routes/uploads'));
 app.use('/api/stats', require('./routes/stats'));
 app.use('/api/pos', require('./routes/pos'));
 
-/* ===== تقديم الواجهة (محمي ضد ENOENT/أخطاء) ===== */
+// Static frontend
 const distDir = path.join(__dirname, '../../frontend/dist');
 const indexFile = path.join(distDir, 'index.html');
 const hasDist = fs.existsSync(indexFile);
@@ -62,12 +61,8 @@ console.log('[STATIC] distDir =', distDir, 'hasDist =', hasDist);
 if (hasDist) {
   app.use(express.static(distDir));
   const sendIndex = (req, res) => {
-    try {
-      res.sendFile(indexFile);
-    } catch (e) {
-      console.error('sendFile(index.html) failed:', e && e.message ? e.message : e);
-      res.status(200).json({ status:'backend-live', note:'failed to serve index.html', error:true });
-    }
+    try { res.sendFile(indexFile); }
+    catch (e) { console.error('sendFile(index.html) failed:', e?.message || e); res.status(200).json({ status:'backend-live', note:'failed to serve index.html', error:true }); }
   };
   app.get('/', sendIndex);
   app.get('*', (req, res, next) => req.path.startsWith('/api') ? next() : sendIndex(req, res));
@@ -75,14 +70,14 @@ if (hasDist) {
   app.get('/', (_req, res) => res.json({ status:'backend-live', note:'frontend/dist not found' }));
 }
 
-/* ===== Mongo ===== */
+// Mongo
 const MONGO = process.env.MONGO_URI || 'mongodb://localhost:27017/pyramidsmart';
 mongoose.connect(MONGO).then(() => {
   console.log('Mongo connected');
-  ensureAdmin().catch(e => console.error('ensureAdmin failed:', e && e.message ? e.message : e));
-}).catch(err => console.error('Mongo connection error:', err && err.message ? err.message : err));
+  ensureAdmin().catch(e => console.error('ensureAdmin failed:', e?.message || e));
+}).catch(err => console.error('Mongo connection error:', err?.message || err));
 
-/* ===== Bootstrap Admin ===== */
+// Bootstrap Admin
 const User = require('./models/User');
 async function ensureAdmin() {
   const adminEmail = process.env.ADMIN_EMAIL;
@@ -96,10 +91,10 @@ async function ensureAdmin() {
       await new User({ name:'Owner', email:adminEmail.toLowerCase(), passwordHash:hash, role:'owner' }).save();
       console.log('Created initial admin user:', adminEmail);
     } else { console.log('Admin user already exists.'); }
-  } catch (err) { console.error('Admin creation error', err && err.message ? err.message : err); }
+  } catch (err) { console.error('Admin creation error', err?.message || err); }
 }
 
-/* ===== Start ===== */
+// Start
 const PORT = process.env.PORT ? parseInt(process.env.PORT,10) : 5000;
 app.listen(PORT, () => {
   console.log(`Server started and listening on port ${PORT}`);
@@ -108,8 +103,8 @@ app.listen(PORT, () => {
   setTimeout(async () => {
     try {
       const whatsappService = require('./services/whatsappService');
-      if (whatsappService && typeof whatsappService.start === 'function') await whatsappService.start();
+      if (whatsappService?.start) await whatsappService.start();
       console.log('WhatsApp start attempted.');
-    } catch (err) { console.error('WhatsApp start error:', err && err.message ? err.message : err); }
+    } catch (err) { console.error('WhatsApp start error:', err?.message || err); }
   }, 2000);
 });
