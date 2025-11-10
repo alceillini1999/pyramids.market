@@ -3,23 +3,19 @@ import Section from '../components/Section'
 import Table from '../components/Table'
 import ActionMenu from '../components/ActionMenu'
 import Modal from '../components/Modal'
-import { readExcelRows, mapRowByAliases, exportRowsToExcel } from "../lib/excel"
+import { readExcelRows, exportRowsToExcel } from "../lib/excel"
 
 // ===== API base (إزالة /api المكرر) =====
 const API_ORIG = (import.meta.env.VITE_API_URL || "").replace(/\/+$/,"")
 const API_BASE = API_ORIG.replace(/\/api$/,"")
 const url = (p) => `${API_BASE}${p.startsWith('/') ? p : `/${p}`}`
 
-// ===== أدوات عامة لقراءة القيم من مسارات متعددة (بما فيها المتداخلة) =====
+// ===== أدوات عامة =====
 const getPath = (obj, path) => {
   if (!obj) return undefined
-  if (path.includes('.')) {
-    return path.split('.').reduce((acc, k) => (acc == null ? acc : acc[k]), obj)
-  }
+  if (path.includes('.')) return path.split('.').reduce((a,k)=> (a==null?a:a[k]), obj)
   return obj[path]
 }
-
-// يرجع أول رقم صالح من مجموعة مسارات/مفاتيح (يدعم المتداخل)
 const pickNumberFromPaths = (obj, paths) => {
   for (const p of paths) {
     const v = getPath(obj, p)
@@ -30,27 +26,16 @@ const pickNumberFromPaths = (obj, paths) => {
   }
   return null
 }
-
 const fmtMoney = (n) => {
   if (n === null) return '—'
-  try {
-    return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', maximumFractionDigits: 2 }).format(n)
-  } catch {
-    const x = Number(n)
-    return isNaN(x) ? '—' : `KSh ${x.toFixed(2)}`
-  }
+  try { return new Intl.NumberFormat('en-KE',{style:'currency',currency:'KES',maximumFractionDigits:2}).format(n) }
+  catch { const x = Number(n); return isNaN(x) ? '—' : `KSh ${x.toFixed(2)}` }
 }
 
-// ===== خرائط أسماء أعمدة الإكسل الشائعة =====
-const PRODUCT_ALIASES = {
-  name: ["name","product","item","product name","اسم","الاسم"],
-  barcode: ["barcode","code","sku","باركود"],
-  salePrice: ["saleprice","price","selling price","sell price","سعر البيع","بيع"],
-  cost: ["cost","purchaseprice","buyprice","buy price","سعر الشراء","تكلفة","التكلفة"],
-  quantity: ["quantity","qty","stock","الكمية","كمية"],
-  expiry: ["expiry","expirydate","expire","exp","expiry date","تاريخ الصلاحية"],
-  category: ["category","cat","الفئة","الصنف"],
-}
+// ===== صفحات محتملة لكل قيمة =====
+const SALE_PATHS = ['salePrice','price','sellingPrice','unitPrice','pricing.sale','price.sale']
+const COST_PATHS = ['cost','costPrice','purchasePrice','buyPrice','pricing.cost','price.cost']
+const QTY_PATHS  = ['quantity','qty','stock','inventory.qty','inventory.quantity']
 
 export default function ProductsPage(){
   const [rows,setRows] = useState([])
@@ -77,17 +62,11 @@ export default function ProductsPage(){
     )
   },[rows,q])
 
-  // مؤشر الإتاحة
   const Availability = ({qty})=>{
     const n = Number(qty||0)
     const color = n === 0 ? 'bg-red-500' : n < 10 ? 'bg-yellow-500' : n > 20 ? 'bg-green-500' : 'bg-yellow-500'
     return <span className={`inline-block w-3 h-3 rounded-full ${color}`} title={String(n)} />
   }
-
-  // مسارات محتملة لكل قيمة
-  const SALE_PATHS = ['salePrice','price','sellingPrice','unitPrice','pricing.sale','price.sale']
-  const COST_PATHS = ['cost','costPrice','purchasePrice','buyPrice','pricing.cost','price.cost']
-  const QTY_PATHS  = ['quantity','qty','stock','inventory.qty','inventory.quantity']
 
   const columns = [
     { key:'name', title:'Name', render:r=> getPath(r,'name') || '—' },
@@ -149,30 +128,61 @@ export default function ProductsPage(){
     setModal({open:false, edit:null})
   }
 
+  // ====== NEW: استيراد إكسل إنجليزي (Name, Barcode, Sale Price, Cost, Quantity, Expiry, Category) ======
+  // نطبع رؤوس الأعمدة إلى شكل "أحرف صغيرة + بدون مسافات" حتى نتعامل مع أي اختلاف في الحروف/المسافات.
+  const canon = (s='') => String(s).toLowerCase().replace(/\s+/g,'').trim()
+  const pickAny = (obj, keys) => {
+    // جرّب مفاتيح كما هي
+    for (const k of keys) if (obj[k] !== undefined) return obj[k]
+    // ثم جرّب بمفاتيح مُقننة (lower+بدون مسافات)
+    const map = Object.fromEntries(Object.keys(obj).map(k => [canon(k), obj[k]]))
+    for (const k of keys) {
+      const v = map[canon(k)]
+      if (v !== undefined) return v
+    }
+    return undefined
+  }
+
   async function onImportExcel(e){
     const f = e.target.files?.[0]
     if (!f) return
     try{
-      const rowsX = await readExcelRows(f)
-      const norm = rowsX.map(r => mapRowByAliases(r, PRODUCT_ALIASES)).map(r => ({
-        name: r.name || "",
-        barcode: String(r.barcode || r.sku || ""),
-        salePrice: Number(r.salePrice ?? r.price ?? r.sellingPrice ?? r.unitPrice ?? r['pricing.sale'] ?? 0),
-        cost: Number(r.cost ?? r.costPrice ?? r.purchasePrice ?? r.buyPrice ?? r['pricing.cost'] ?? 0),
-        quantity: Number(r.quantity ?? r.qty ?? r.stock ?? r['inventory.qty'] ?? 0),
-        expiry: r.expiry ? String(r.expiry).slice(0,10) : "",
-        category: r.category || "",
-      }))
+      const rowsX = await readExcelRows(f) // صفوف كائنات {Header:Value}
+      const norm = rowsX.map(rRaw => {
+        const r = rRaw || {}
+        const name     = pickAny(r, ['Name','Product','Item','Product Name'])
+        const barcode  = pickAny(r, ['Barcode','Code','SKU'])
+        const sale     = pickAny(r, ['Sale Price','Selling Price','Sell Price','Price','Unit Price'])
+        const cost     = pickAny(r, ['Cost','Cost Price','Purchase Price','Buy Price'])
+        const qty      = pickAny(r, ['Quantity','Qty','Stock'])
+        const expiry   = pickAny(r, ['Expiry','Expiry Date','Expire','Exp'])
+        const category = pickAny(r, ['Category','Cat'])
+
+        return {
+          name: name || '',
+          barcode: barcode ? String(barcode) : '',
+          salePrice: Number(sale ?? 0),
+          cost: Number(cost ?? 0),
+          quantity: Number(qty ?? 0),
+          expiry: expiry ? String(expiry).slice(0,10) : '',
+          category: category || ''
+        }
+      })
+
+      // أرسل JSON للراوتر الذي أضفناه: POST /api/products/import/excel
       const res = await fetch(url('/api/products/import/excel'), {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ items: norm })
       })
       if (!res.ok) throw new Error(await res.text())
+
+      // أعد الجلب بعد الاستيراد
       const rr = await fetch(url('/api/products'))
       const dd = await rr.json()
       setRows(Array.isArray(dd) ? dd : [])
       e.target.value=""
+
       alert('Imported products.')
     }catch(err){
       alert('Import failed:\n' + err.message)
