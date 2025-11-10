@@ -2,16 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ===== حركة التدرّج — تستعمل داخل AppBackground.jsx عبر keyframes ===== */
+/* ===== حركة التدرّج ===== */
 @keyframes brandGradient {
   0%   { background-position:   0% 50%; }
   50%  { background-position: 100% 50%; }
   100% { background-position:   0% 50%; }
 }
 
+/* تأكد من أن العناصر الأساسية شفافة */
+html, body, #root {
+  height: 100%;
+  background: transparent !important;
+}
+
 /* ===== Glass Dark للـ Sidebar / Topbar / Main containers ===== */
 :root{
-  --glass-alpha: 0.20;                 /* يمكنك ضبطها 0.15 – 0.30 */
+  --glass-alpha: 0.20;                 /* يمكنك ضبطها بين 0.15 – 0.30 */
   --glass-bg: rgba(0,0,0,var(--glass-alpha));
   --glass-brd: rgba(255,255,255,0.10);
   --glass-blur: 6px;
@@ -49,12 +55,12 @@ section.content, main .container, main > .wrapper,
     inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
-/* إزالة الخلفيات البيضاء الافتراضية التي قد تغطي التدرج */
+/* إزالة أي خلفيات بيضاء قد تغطي التدرج */
 .bg-white, .bg-gray-50, .bg-gray-100, .bg-slate-50, .bg-slate-100 {
   background: transparent !important;
 }
 
-/* إبقاء الأزرار والنصوص كما هي (لا تغييرات ألوان) */
+/* إبقاء الأزرار والنصوص كما هي */
 .badge { @apply inline-flex items-center rounded-full border border-line px-2 py-0.5 text-xs text-mute bg-white; }
 .btn { @apply inline-flex items-center gap-2 rounded-xl px-3 py-2 border border-line bg-white text-ink hover:shadow-soft transition; }
 .btn-primary { @apply bg-gold text-black border-gold hover:opacity-95; }
@@ -62,7 +68,7 @@ section.content, main .container, main > .wrapper,
 .card-value { @apply text-2xl font-semibold text-ink; }
 .link { @apply text-cocoa hover:opacity-80 underline-offset-4 hover:underline; }
 
-/* إخفاء أي فوتر قديم داخل الواجهة */
+/* إخفاء أي فوتر داخل الواجهة */
 footer, .pm-footer, footer.pm-footer, [data-role="footer"] {
   display: none !important;
 }
