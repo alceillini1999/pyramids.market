@@ -1,10 +1,10 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import Section from '../components/Section'
 import ChartSales from '../components/ChartSales'
 
 const K = n => `KSh ${Number(n).toLocaleString('en-KE')}`
 
-// بيانات افتراضية مسبقة (يوم/شهر/سنة)
+// بيانات افتراضية للمخططات كما هي
 const DATA = {
   day: [
     { label: '8am', sales: 12500, expenses: 4200, net: 8300 },
@@ -45,6 +45,20 @@ export default function OverviewPage() {
   const [to, setTo] = useState('')
   const [customData, setCustomData] = useState([])
 
+  // ← إجماليات حقيقية من الـ API
+  const [apiTotals, setApiTotals] = useState({ totalSales: 0, totalExpenses: 0, netProfit: 0 })
+  useEffect(()=>{
+    const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/,"");
+    fetch(`${API_BASE}/stats/overview`, { credentials:'include' })
+      .then(r=>r.json())
+      .then(d=> setApiTotals({
+        totalSales: Number(d?.totalSales || 0),
+        totalExpenses: Number(d?.totalExpenses || 0),
+        netProfit: Number(d?.netProfit || 0),
+      }))
+      .catch(()=>{}) // لا نكسر الصفحة إن فشل
+  },[])
+
   const dataset = range === 'custom' ? customData : DATA[range]
 
   const totals = useMemo(() => {
@@ -62,11 +76,11 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      {/* Summary cards */}
+      {/* Summary cards — الآن من API */}
       <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
-        <div className="bg-elev p-4"><div className="card-title">Total Sales</div><div className="card-value mt-1">{K(totals.s)}</div></div>
-        <div className="bg-elev p-4"><div className="card-title">Expenses</div><div className="card-value mt-1">{K(totals.e)}</div></div>
-        <div className="bg-elev p-4"><div className="card-title">Net Profit</div><div className="card-value mt-1">{K(totals.n)}</div></div>
+        <div className="bg-elev p-4"><div className="card-title">Total Sales</div><div className="card-value mt-1">{K(apiTotals.totalSales)}</div></div>
+        <div className="bg-elev p-4"><div className="card-title">Expenses</div><div className="card-value mt-1">{K(apiTotals.totalExpenses)}</div></div>
+        <div className="bg-elev p-4"><div className="card-title">Net Profit</div><div className="card-value mt-1">{K(apiTotals.netProfit)}</div></div>
       </div>
 
       <Section

@@ -1,4 +1,3 @@
-// backend/src/services/whatsappService.js
 const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
 const QRCode = require("qrcode");
 const fs = require("fs");
@@ -18,14 +17,14 @@ async function start() {
   sock = makeWASocket({
     version,
     auth: state,
-    printQRInTerminal: false, // نعتمد على الحدث connection.update بدلاً من هذا
+    printQRInTerminal: false,
     syncFullHistory: false,
   });
 
   sock.ev.on("creds.update", saveCreds);
 
   sock.ev.on("connection.update", async (update) => {
-    const { connection, qr, lastDisconnect } = update;
+    const { connection, qr } = update;
 
     if (qr) {
       qrString = qr;
@@ -61,4 +60,9 @@ async function getQrDataUrl() {
   return await QRCode.toDataURL(qrString);
 }
 
-module.exports = { start, getStatus, getQrDataUrl };
+// ← إضافة بسيطة: إرجاع النص الخام للـQR ليتوافق مع الواجهة
+function getQrString(){
+  return qrString || null;
+}
+
+module.exports = { start, getStatus, getQrDataUrl, getQrString };

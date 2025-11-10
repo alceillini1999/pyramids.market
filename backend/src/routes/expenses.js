@@ -3,6 +3,24 @@ const express = require('express');
 const router = express.Router();
 const Expense = require('../models/Expense');
 
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const auth = require('../middlewares/auth');
+
+// === إعداد رفع الملف (لإيصال المصروف) ===
+const uploadsDir = path.join(__dirname, '../../uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+const storage = multer.diskStorage({
+  destination: (_req,file,cb)=> cb(null, uploadsDir),
+  filename: (_req,file,cb)=>{
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    cb(null, `receipt_${Date.now()}${ext || '.png'}`);
+  }
+});
+const upload = multer({ storage });
+// ========================================
+
 // List
 router.get('/', async (req, res) => {
   try {
@@ -30,12 +48,6 @@ router.post('/bulk-upsert', async (req, res) => {
     const items = Array.isArray(req.body?.items) ? req.body.items : [];
     if (!items.length) return res.json({ ok: true, upserted: 0 });
 
-    const toKey = (o) => {
-      const d = o.date ? new Date(o.date) : null;
-      const ds = d ? new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString() : '';
-      return `${(o.name||'').trim().toLowerCase()}|${ds}`;
-    };
-
     const ops = [];
     for (const it of items) {
       const doc = {
@@ -62,6 +74,18 @@ router.post('/bulk-upsert', async (req, res) => {
     });
   } catch (e) {
     console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// === رفع إيصال المصروف (الإضافة المطلوبة) ===
+router.post('/:id/receipt', auth, upload.single('file'), async (req,res)=>{
+  try {
+    if (!req.file) return res.status(400).json({ message:'No file' });
+    const fileUrl = `/uploads/${req.file.filename}`;
+    await Expense.findByIdAndUpdate(req.params.id, { receiptUrl: fileUrl });
+    res.json({ ok:true, receiptUrl: fileUrl });
+  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });

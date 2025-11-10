@@ -1,5 +1,5 @@
 // frontend/src/pages/ProductsPage.jsx
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { readExcelRows, mapRowByAliases, exportTableToExcel } from "../lib/excel";
@@ -19,12 +19,21 @@ const PRODUCT_ALIASES = {
   quantity: ["qty", "quantity", "stock"],
   active: ["active", "enabled", "isactive"],
   totalSales: ["totalsales", "total sales"],
-  updatedAt: ["updatedat", "updated", "last updated"],
+  expiryDate: ["expiry", "expirydate", "expiration", "expire date"], // جديد
+  category: ["category", "cat", "group"], // جديد
 };
+
+function AvailabilityDot({ qty }){
+  const color = qty === 0 ? 'bg-red-500' : (qty <= 10 ? 'bg-yellow-500' : 'bg-green-500');
+  return <span className={`inline-block w-3 h-3 rounded-full ${color}`} />;
+}
 
 export default function Products() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState('');
+  const [cat, setCat] = useState('');
+  const [avail, setAvail] = useState(''); // ok | low | zero | ''
   const fileRef = useRef(null);
   const tableRef = useRef(null);
 
@@ -46,6 +55,23 @@ export default function Products() {
     fetchProducts();
   }, []);
 
+  const categories = useMemo(()=>{
+    const s = new Set((products||[]).map(p=>p.category).filter(Boolean));
+    return Array.from(s);
+  },[products]);
+
+  const filtered = useMemo(()=>{
+    return (products||[]).filter(p=>{
+      const name = String(p.name||''); const barcode = String(p.barcode||'');
+      const hitQ = !q || name.toLowerCase().includes(q.toLowerCase()) || barcode.includes(q);
+      const hitCat = !cat || String(p.category||'') === cat;
+      const qty = Number(p.quantity||0);
+      const flag = qty===0 ? 'zero' : (qty<=10 ? 'low' : 'ok');
+      const hitAvail = !avail || avail===flag;
+      return hitQ && hitCat && hitAvail;
+    });
+  },[products,q,cat,avail]);
+
   async function onImportExcel(e) {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -58,9 +84,9 @@ export default function Products() {
         quantity: Number(r.quantity || 0),
         active: String(r.active).toLowerCase() === "true" || String(r.active).toLowerCase() === "1",
         totalSales: Number(r.totalSales || 0),
-        updatedAt: r.updatedAt || new Date().toISOString(),
+        expiryDate: r.expiryDate ? new Date(r.expiryDate).toISOString() : null,
+        category: r.category || "",
       }));
-      // Persist via backend /bulk-import (JSON mode)
       const res = await fetch(url('/api/products/bulk-import'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -68,7 +94,6 @@ export default function Products() {
       });
       if (!res.ok) throw new Error(await res.text());
 
-      // reload
       const out = await fetch(url("/api/products"));
       const data = await out.json();
       setProducts(Array.isArray(data) ? data : []);
@@ -101,6 +126,21 @@ export default function Products() {
             </div>
           </div>
 
+          {/* بحث وفلاتر */}
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <input className="border border-line rounded-xl px-3 py-2" placeholder="ابحث بالاسم أو الباركود…" value={q} onChange={e=>setQ(e.target.value)} />
+            <select className="border border-line rounded-xl px-3 py-2" value={cat} onChange={e=>setCat(e.target.value)}>
+              <option value="">All Categories</option>
+              {categories.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+            <select className="border border-line rounded-xl px-3 py-2" value={avail} onChange={e=>setAvail(e.target.value)}>
+              <option value="">All Availability</option>
+              <option value="ok">Available (&gt;20)</option>
+              <option value="low">Low (≤10)</option>
+              <option value="zero">Out of stock (0)</option>
+            </select>
+          </div>
+
           {loading ? (
             <div>Loading…</div>
           ) : (
@@ -112,21 +152,25 @@ export default function Products() {
                     <th className="py-2 pr-6">Sale Price</th>
                     <th className="py-2 pr-6">Cost Price</th>
                     <th className="py-2 pr-6">Quantity</th>
-                    <th className="py-2 pr-6">Active</th>
+                    <th className="py-2 pr-6">الإتاحة</th> {/* بدلاً من Active */}
                     <th className="py-2 pr-6">Total Sales</th>
-                    <th className="py-2 pr-6">Updated At</th>
+                    <th className="py-2 pr-6">Expiry Date</th> {/* بدلاً من Updated At */}
+                    <th className="py-2 pr-6">Category</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {products.map((p, idx) => (
+                  {filtered.map((p, idx) => (
                     <tr key={p._id || idx} className="border-b border-line">
                       <td className="py-2 pr-6">{getVal(p, ["name"])}</td>
                       <td className="py-2 pr-6">{getVal(p, ["salePrice"])}</td>
                       <td className="py-2 pr-6">{getVal(p, ["costPrice"])}</td>
                       <td className="py-2 pr-6">{getVal(p, ["quantity"])}</td>
-                      <td className="py-2 pr-6">{String(getVal(p, ["active"], ""))}</td>
+                      <td className="py-2 pr-6"><AvailabilityDot qty={Number(p.quantity||0)} /></td>
                       <td className="py-2 pr-6">{getVal(p, ["totalSales"])}</td>
-                      <td className="py-2 pr-6">{getVal(p, ["updatedAt"])}</td>
+                      <td className="py-2 pr-6">
+                        {p.expiryDate ? String(p.expiryDate).slice(0,10) : ''}
+                      </td>
+                      <td className="py-2 pr-6">{p.category || ''}</td>
                     </tr>
                   ))}
                 </tbody>

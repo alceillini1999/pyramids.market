@@ -1,4 +1,3 @@
-// frontend/src/pages/ExpensesPage.jsx
 import React, { useMemo, useRef, useState, useEffect } from 'react'
 import Section from '../components/Section'
 import Table from '../components/Table'
@@ -49,7 +48,7 @@ export default function ExpensesPage() {
     { key:'name',   title:'Name' },
     { key:'date',   title:'Date' },
     { key:'amount', title:'Amount', render:r=>K(r.amount) },
-    { key:'category',   title:'Category' },
+    // { key:'category',   title:'Category' }, // ← محذوف حسب طلبك
     { key:'notes',   title:'Notes' },
   ]
 
@@ -57,14 +56,14 @@ export default function ExpensesPage() {
     {key:'name', title:'Name'},
     {key:'date', title:'Date'},
     {key:'amount', title:'Amount'},
-    {key:'category', title:'Category'},
+    // {key:'category', title:'Category'}, // محذوف من التصدير أيضاً لتطابق الجدول
     {key:'notes', title:'Notes'},
   ], "expenses.xlsx")
 
   function addNew(){
     setModal({
       open: true,
-      edit: { name:'', date: new Date().toISOString().slice(0,10), amount:0, category:'Variable', notes:'' }
+      edit: { name:'', date: new Date().toISOString().slice(0,10), amount:0, category:'', notes:'' }
     })
   }
 
@@ -96,7 +95,7 @@ export default function ExpensesPage() {
         name: r.name || "",
         date: String(r.date || "").slice(0,10),
         amount: Number(r.amount || 0),
-        category: r.category || "",
+        // category محذوف من الواجهة، لكن لا نمنع وجوده في البيانات
         notes: r.notes || "",
       }))
       const res = await fetch(url('/api/expenses/bulk-upsert'), {
@@ -113,6 +112,17 @@ export default function ExpensesPage() {
     } catch (err) {
       alert("Import failed:\n" + err.message)
     }
+  }
+
+  async function uploadReceipt(expenseId, file){
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(url(`/api/expenses/${expenseId}/receipt`), { method:'POST', body: fd });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    // تحديث الصف لعرض receiptUrl إن رغبت مستقبلاً
+    setRows(prev => prev.map(r => r._id===expenseId ? {...r, receiptUrl: data.receiptUrl} : r));
+    alert('Receipt uploaded.');
   }
 
   return (
@@ -138,12 +148,24 @@ export default function ExpensesPage() {
           </div>
         }
       >
-        <Table columns={[...columns, {key:'__actions', title:'Actions', render:r=>(
-          <div className="flex gap-2">
-            <button className="btn" onClick={()=>setModal({open:true, edit:{...r, date:String(r.date).slice(0,10)}})}>Edit</button>
-            <button className="btn" onClick={()=>setRows(rows.filter(x=>x._id!==r._id))}>Delete</button>
-          </div>
-        )}]} data={filt} />
+        <Table columns={[
+          ...columns,
+          {
+            key:'__upload',
+            title:'Receipt',
+            render:r=>(
+              <label className="btn">
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  className="hidden"
+                  onChange={(e)=> e.target.files?.[0] && uploadReceipt(r._id, e.target.files[0])}
+                />
+                Upload
+              </label>
+            )
+          }
+        ]} data={filt} />
         <div className="text-right mt-2 text-sm text-mute">Total: <strong>{K(total)}</strong></div>
       </Section>
 
@@ -171,13 +193,7 @@ export default function ExpensesPage() {
                      onChange={e=>setModal(m=>({...m, edit:{...m.edit, amount:e.target.value}}))}/>
             </label>
 
-            <label className="text-sm">
-              <span className="block text-mute mb-1">Category</span>
-              <input className="border border-line rounded-xl px-3 py-2 w-full"
-                     value={modal.edit.category}
-                     onChange={e=>setModal(m=>({...m, edit:{...m.edit, category:e.target.value}}))}/>
-            </label>
-
+            {/* Category محذوف من الجدول، نتركه داخليًا إن رغبت لاحقًا */}
             <label className="col-span-2 text-sm">
               <span className="block text-mute mb-1">Notes</span>
               <input className="border border-line rounded-xl px-3 py-2 w-full"

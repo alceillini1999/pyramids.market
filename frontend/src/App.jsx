@@ -9,6 +9,7 @@ import ExpensesPage from './pages/ExpensesPage'
 import POSPage from './pages/POSPage'
 import ClientsPage from './pages/ClientsPage'
 import WhatsAppPage from './pages/WhatsAppPage'
+import SalesPage from './pages/SalesPage' // ← صفحة المبيعات الجديدة
 
 export default function App(){
   return (
@@ -22,6 +23,7 @@ export default function App(){
           <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/pos" element={<POSPage />} />
           <Route path="/clients" element={<ClientsPage />} />
+          <Route path="/sales" element={<SalesPage />} /> {/* ← route جديد */}
           <Route path="*" element={<div className="p-6">الصفحة غير موجودة</div>} />
         </Routes>
       </Layout>

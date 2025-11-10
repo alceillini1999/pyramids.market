@@ -44,13 +44,14 @@ app.use(express.json());
 app.get('/api/healthz', (req, res) => res.json({ status: 'ok', name:'pyramids-mart-backend' }));
 
 // mount routers (مركّبة ومؤكَّدة من ملفك)
-app.use('/api/auth', require('./routes/auth'));         // :contentReference[oaicite:1]{index=1}
-app.use('/api/clients', require('./routes/clients'));   // :contentReference[oaicite:2]{index=2}
-app.use('/api/products', require('./routes/products')); // :contentReference[oaicite:3]{index=3}
-app.use('/api/expenses', require('./routes/expenses')); // :contentReference[oaicite:4]{index=4}
-app.use('/api/sales', require('./routes/sales'));       // :contentReference[oaicite:5]{index=5}
-app.use('/api/whatsapp', require('./routes/whatsapp')); // :contentReference[oaicite:6]{index=6}
-app.use('/api/uploads', require('./routes/uploads'));   // :contentReference[oaicite:7]{index=7}
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/clients', require('./routes/clients'));
+app.use('/api/products', require('./routes/products'));
+app.use('/api/expenses', require('./routes/expenses'));
+app.use('/api/sales', require('./routes/sales'));
+app.use('/api/whatsapp', require('./routes/whatsapp'));
+app.use('/api/uploads', require('./routes/uploads'));
+app.use('/api/stats', require('./routes/stats')); // ← الإضافة الوحيدة المطلوبة (توصيل راوتر الإحصائيات)
 app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
 
 // Error handlers

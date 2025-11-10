@@ -1,12 +1,6 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import Section from '../components/Section'
-import { DEFAULT_CLIENTS, loadClients, applyPurchaseToClient } from '../lib/store'
 
-const PRODUCTS = [
-  { id: 1, name:'Green Tea',     price: 675,  barcode: '1111' },
-  { id: 2, name:'Chocolate Bar', price: 250,  barcode: '2222' },
-  { id: 3, name:'Coffee Beans',  price: 1299, barcode: '3333' },
-]
 const K = n => `KSh ${Number(n).toLocaleString('en-KE')}`
 
 export default function POSPage() {
@@ -15,27 +9,45 @@ export default function POSPage() {
   const [discount, setDiscount] = useState(0)
   const [points, setPoints]   = useState(0)
   const [pay, setPay]         = useState('Cash')
-  const [client, setClient]   = useState(loadClients()[0] || DEFAULT_CLIENTS[0])
+  const [client, setClient]   = useState(null)
+
+  const [products, setProducts] = useState([])
+  const [clientsList, setClientsList] = useState([])
+
+  const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/,"");
+
+  useEffect(()=>{
+    // جلب المنتجات
+    fetch(`${API_BASE}/products`).then(r=>r.json()).then(d=>{
+      setProducts(Array.isArray(d)? d : [])
+    }).catch(()=>{})
+    // جلب العملاء
+    fetch(`${API_BASE}/clients`, { credentials:'include' }).then(r=>r.json()).then(d=>{
+      const arr = Array.isArray(d?.data)? d.data : (Array.isArray(d)? d : [])
+      setClientsList(arr)
+      setClient(arr[0] || null)
+    }).catch(()=>{})
+  },[])
 
   const list = useMemo(()=>{
     const q = query.toLowerCase()
-    return PRODUCTS.filter(p => p.name.toLowerCase().includes(q) || p.barcode.includes(q))
-  }, [query])
+    return (products||[]).filter(p => (p.name||'').toLowerCase().includes(q) || String(p.barcode||'').includes(q))
+  }, [query, products])
 
-  const subtotal = cart.reduce((a,b)=>a+b.price*b.qty,0)
+  const subtotal = cart.reduce((a,b)=>a+Number(b.price||0)*Number(b.qty||0),0)
   const total    = Math.max(subtotal - discount, 0)
 
   function addItem(p){
     setCart(prev=>{
-      const idx = prev.findIndex(x=>x.id===p.id)
+      const idx = prev.findIndex(x=>x._id===p._id)
       if (idx>=0) { const cp=[...prev]; cp[idx].qty++; return cp }
-      return [...prev, {...p, qty:1}]
+      return [...prev, { _id:p._id, name:p.name, price:Number(p.salePrice||0), qty:1 }]
     })
   }
   function changeQty(id, qty){
-    setCart(prev => prev.map(x => x.id===id ? {...x, qty: Math.max(1, qty)} : x))
+    setCart(prev => prev.map(x => x._id===id ? {...x, qty: Math.max(1, qty)} : x))
   }
-  function remove(id){ setCart(prev => prev.filter(x=>x.id!==id)) }
+  function remove(id){ setCart(prev => prev.filter(x=>x._id!==id)) }
 
   function printInvoice(){ window.print() }
   function shareWhatsApp(){
@@ -46,19 +58,10 @@ export default function POSPage() {
   function confirmPurchase(){
     if (!client) { alert('Please select a client first'); return }
     if (cart.length === 0) { alert('Cart is empty'); return }
-    // Apply to clients store
-    const updated = applyPurchaseToClient(client.id, { points })
-    // Clear cart & points for next sale
+    // تترك كما هي (ديمو) لحين ربط /pos/checkout
+    alert(`Purchase confirmed (demo).\nClient: ${client.name}\nItems: ${cart.length}\nTotal: ${K(total)}`)
     setCart([]); setDiscount(0); setPoints(0)
-    if (updated) {
-      setClient(updated)
-      alert(`Purchase confirmed!\nClient: ${updated.name}\nAdded points: ${points}\nNew total points: ${updated.points}`)
-    } else {
-      alert('Client update failed (demo store).')
-    }
   }
-
-  const clientsList = loadClients()
 
   return (
     <div className="grid xl:grid-cols-4 gap-6">
@@ -67,9 +70,9 @@ export default function POSPage() {
         <input className="w-full rounded-xl border border-line px-3 py-2" placeholder="Search by name or barcode..." value={query} onChange={e=>setQuery(e.target.value)} />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
           {list.map(p=>(
-            <button key={p.id} className="rounded-xl border border-line px-3 py-2 text-left hover:bg-base" onClick={()=>addItem(p)}>
+            <button key={p._id} className="rounded-xl border border-line px-3 py-2 text-left hover:bg-base" onClick={()=>addItem(p)}>
               <div className="font-medium">{p.name}</div>
-              <div className="text-sm text-mute">{K(p.price)} — #{p.barcode}</div>
+              <div className="text-sm text-mute">{K(p.salePrice)} — #{p.barcode || 'N/A'}</div>
             </button>
           ))}
         </div>
@@ -80,14 +83,14 @@ export default function POSPage() {
         {cart.length===0 ? <div className="text-mute">No items yet</div> : (
           <ul className="space-y-2">
             {cart.map(item=>(
-              <li key={item.id} className="flex items-center justify-between border border-line rounded-xl p-2">
+              <li key={item._id} className="flex items-center justify-between border border-line rounded-xl p-2">
                 <div>
                   <div className="font-medium">{item.name}</div>
                   <div className="text-sm text-mute">{K(item.price)}</div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <input type="number" className="w-20 border border-line rounded-xl px-2 py-1" value={item.qty} onChange={e=>changeQty(item.id, +e.target.value)} />
-                  <button className="btn" onClick={()=>remove(item.id)}>Remove</button>
+                  <input type="number" className="w-20 border border-line rounded-xl px-2 py-1" value={item.qty} onChange={e=>changeQty(item._id, +e.target.value)} />
+                  <button className="btn" onClick={()=>remove(item._id)}>Remove</button>
                 </div>
               </li>
             ))}
@@ -112,7 +115,7 @@ export default function POSPage() {
           <div>
             <div className="card-title mb-1">Payment Method</div>
             <div className="flex gap-2">
-              {['Cash','M-PESA','Card'].map(m=>(
+              {['Cash','M-PESA','Bank','Other'].map(m=>(
                 <label key={m} className={`btn ${pay===m?'btn-primary':''}`}>
                   <input type="radio" className="hidden" checked={pay===m} onChange={()=>setPay(m)} />{m}
                 </label>
@@ -121,7 +124,7 @@ export default function POSPage() {
           </div>
 
           <div className="text-sm text-mute">
-            Client: <b>{client ? `${client.name} (${client.phone})` : 'None selected'}</b>
+            Client: <b>{client ? `${client.name} (${client.phone||''})` : 'None selected'}</b>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -136,9 +139,9 @@ export default function POSPage() {
       <Section title="Select Client">
         <ul className="space-y-2">
           {clientsList.map(c => (
-            <li key={c.id}>
+            <li key={c._id || c.phone}>
               <button
-                className={`w-full text-left rounded-xl px-3 py-2 border ${client?.id===c.id ? 'bg-base border-line' : 'border-line hover:bg-base'}`}
+                className={`w-full text-left rounded-xl px-3 py-2 border ${client?._id===c._id ? 'bg-base border-line' : 'border-line hover:bg-base'}`}
                 onClick={()=>setClient(c)}
               >
                 <div className="font-medium">{c.name}</div>

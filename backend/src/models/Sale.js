@@ -1,18 +1,31 @@
 const mongoose = require('mongoose');
-const Schema = mongoose.Schema;
-const SaleSchema = new Schema({
-  items:[{
-    product:{type:Schema.Types.ObjectId, ref:'Product'},
-    name:String,
-    qty:Number,
-    price:Number
-  }],
-  subTotal:Number,
-  tax:Number,
-  discount:Number,
-  total:Number,
-  paymentMethod:{type:String, enum:['Cash','M-Pesa','Bank']},
-  customer:{type:Schema.Types.ObjectId, ref:'Client'},
-  timestamp:{type:Date, default:Date.now}
+
+const saleItemSchema = new mongoose.Schema({
+  product:  { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+  name:     { type: String },
+  qty:      { type: Number, required: true },
+  price:    { type: Number, required: true },
+  cost:     { type: Number, default: 0 },
+  subtotal: { type: Number, required: true },
+}, { _id: false });
+
+const saleSchema = new mongoose.Schema({
+  invoiceNumber: { type: String, unique: true, index: true },
+  client:        { type: mongoose.Schema.Types.ObjectId, ref: 'Client' },
+  clientName:    { type: String },
+  items:         { type: [saleItemSchema], default: [] },
+  total:         { type: Number, required: true },
+  paymentMethod: { type: String, enum: ['CASH','MPESA','BANK','OTHER'], required: true },
+  profit:        { type: Number, default: 0 },
+}, { timestamps: true });
+
+saleSchema.pre('save', function(next){
+  if (!this.invoiceNumber) {
+    const d = new Date();
+    const ymd = d.toISOString().slice(0,10).replace(/-/g,'');
+    this.invoiceNumber = `INV-${ymd}-${Math.floor(100000 + Math.random()*900000)}`;
+  }
+  next();
 });
-module.exports = mongoose.model('Sale', SaleSchema);
+
+module.exports = mongoose.model('Sale', saleSchema);

@@ -8,11 +8,12 @@ const url = (p) => `${API_BASE}${p.startsWith('/')?p:`/${p}`}`;
 
 export default function WhatsAppPage() {
   const [clients, setClients] = useState([]);
+  const [q, setQ] = useState(""); // ← بحث العملاء
   const [selectedClients, setSelectedClients] = useState([]);
   const [message, setMessage] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [status, setStatus] = useState("Not connected");
-  const [qrImage, setQrImage] = useState(null);
+  const [qrDataUrl, setQrDataUrl] = useState(null); // ← صورة QR
 
   // Load clients from backend instead of hardcoded list
   useEffect(() => {
@@ -20,7 +21,8 @@ export default function WhatsAppPage() {
       try {
         const res = await fetch(url('/api/clients'), { credentials:'include' });
         const json = await res.json();
-        setClients(Array.isArray(json.data) ? json.data : json);
+        const arr = Array.isArray(json.data) ? json.data : json;
+        setClients(Array.isArray(arr) ? arr : []);
       } catch (e) {
         console.error("Failed to load clients", e);
       }
@@ -29,20 +31,46 @@ export default function WhatsAppPage() {
 
   // WhatsApp status
   useEffect(() => {
-    const apiBase = API_BASE;
     async function fetchStatus() {
       try {
-        const res = await fetch(`${apiBase}/api/whatsapp/status`);
+        const res = await fetch(`${API_BASE}/api/whatsapp/status`);
         const data = await res.json();
         setStatus(data.state || "Unknown");
-      } catch (err) {
+      } catch {
         setStatus("Error");
       }
     }
     fetchStatus();
-    const interval = setInterval(fetchStatus, 5000);
-    return () => clearInterval(interval);
+    const i1 = setInterval(fetchStatus, 5000);
+    return () => clearInterval(i1);
   }, []);
+
+  // QR polling (يتطلب backend يعيد { qr: '...' })
+  useEffect(() => {
+    let cancelled = false;
+    let QR;
+    (async function loop(){
+      try {
+        const res = await fetch(`${API_BASE}/api/whatsapp/qr`);
+        if (res.status === 200) {
+          const data = await res.json();
+          if (data?.qr) {
+            // استيراد ديناميكي لمكتبة qrcode بدون التأثير على بقية الباندل
+            QR = QR || (await import('qrcode'));
+            const url = await QR.toDataURL(data.qr);
+            if (!cancelled) setQrDataUrl(url);
+          }
+        }
+      } catch {}
+      if (!cancelled) setTimeout(loop, 3000);
+    })();
+    return ()=>{ cancelled = true; }
+  }, []);
+
+  const filtered = clients.filter(c =>
+    (c.name||"").toLowerCase().includes(q.toLowerCase()) ||
+    (c.phone||"").includes(q)
+  );
 
   const handleSelectClient = (phone) => {
     setSelectedClients((prev) =>
@@ -81,12 +109,26 @@ export default function WhatsAppPage() {
             <div>Status: {status}</div>
           </div>
 
+          {/* QR */}
+          {qrDataUrl && (
+            <div className="mb-4">
+              <div className="text-sm text-mute mb-1">Scan to connect:</div>
+              <img src={qrDataUrl} alt="WhatsApp QR" className="w-56 h-56 border rounded" />
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <h3 className="font-semibold mb-2">Clients</h3>
+              <input
+                className="w-full border rounded p-2 mb-2"
+                placeholder="Search by name or phone…"
+                value={q}
+                onChange={(e)=>setQ(e.target.value)}
+              />
               <div className="max-h-80 overflow-y-auto border rounded p-2">
-                {clients.map((c) => (
-                  <label key={c._id} className="flex items-center gap-2 py-1">
+                {filtered.map((c) => (
+                  <label key={c._id || c.phone} className="flex items-center gap-2 py-1">
                     <input
                       type="checkbox"
                       value={c.phone}

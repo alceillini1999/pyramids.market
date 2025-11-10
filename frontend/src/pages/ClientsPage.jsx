@@ -93,7 +93,6 @@ export default function ClientsPage() {
           body: JSON.stringify({ items: norm })
         })
       } catch (e1) {
-        // fallback: upload file
         const fd = new FormData();
         fd.append('file', f);
         await api('/api/clients/import/excel', { method:'POST', body: fd })
@@ -105,16 +104,6 @@ export default function ClientsPage() {
       alert('Imported & synced.');
     } catch (err) {
       alert('Failed to import:\n' + err.message)
-    }
-  }
-
-  async function removeRow(r){
-    if (!confirm('Delete this client?')) return;
-    try{
-      await api(`/api/clients/${r._id}`, { method: "DELETE" })
-      setRows(rows.filter(x=>x._id!==r._id))
-    }catch(e){
-      alert("Delete failed:\n" + e.message)
     }
   }
 
@@ -137,12 +126,8 @@ export default function ClientsPage() {
           </div>
         }
       >
-        <Table columns={[...columns, {key:'__actions', title:'Actions', render:r=>(
-          <div className="flex gap-2">
-            <button className="btn" onClick={()=>alert('Edit TBD')}>Edit</button>
-            <button className="btn" onClick={()=>removeRow(r)}>Delete</button>
-          </div>
-        )}]} data={filtered} />
+        {/* أزلت عمود Actions */}
+        <Table columns={columns} data={filtered} />
       </Section>
 
       <Section title="Loyalty & Notes">
