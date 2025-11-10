@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* --------- إعداد الخلفية المتحركة --------- */
+body {
+  background: linear-gradient(-45deg, #0A1931, #185ADB, #FFC947, #0A1931);
+  background-size: 400% 400%;
+  animation: gradientAnimation 12s ease infinite;
+  color: #fff;
+  min-height: 100vh;
+  transition: background 1s ease;
+}
+
+@keyframes gradientAnimation {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* --------- تنسيق المكونات المعتاد --------- */
 :root { --ring: #D4AF37; }
 
 .bg-elev { @apply bg-card shadow-soft rounded-2xl; }

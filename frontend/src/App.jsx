@@ -11,11 +11,7 @@ import POSPage from './pages/POSPage'
 import ClientsPage from './pages/ClientsPage'
 import SalesPage from './pages/SalesPage'
 
-/* الخلفية والثيم العام */
-import AppBackground from './ui/theme/AppBackground'
-import './styles/pyramids-theme.css'
-
-/* الأنيميشن العام للصفحات */
+// الأنيميشن العام للصفحات
 import { AnimatePresence } from 'framer-motion'
 import PageWrapper from './ui/anim/PageWrapper'
 
@@ -41,13 +37,12 @@ function RoutedPages() {
 export default function App() {
   return (
     <BrowserRouter>
-      {/* الخلفية المتحركة على مستوى التطبيق كله */}
-      <AppBackground>
-        {/* نضيف كلاس لبدء التحريك لعناصر الواجهة الشائعة */}
+      {/* الخلفية المتحركة تعمل على مستوى المشروع بالكامل */}
+      <div className="min-h-screen relative">
         <Layout className="motion-ready">
           <RoutedPages />
         </Layout>
-      </AppBackground>
+      </div>
     </BrowserRouter>
   )
 }
