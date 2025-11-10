@@ -1,38 +1,55 @@
-/* نطاق الثيم على مستوى التطبيق */
+/* نطاق الثيم */
 .theme-pyramids {
   --bg: #0B0F14;
+  --bg-soft: #0E1319;
   --card: rgba(18,22,28,.78);
+  --card-strong: rgba(18,22,28,.92);
   --border: rgba(255,255,255,.06);
+  --line: rgba(255,255,255,.08);
+  --text: #ffffff;
+  --text-dim: #d1d5db;
+  --muted: #9ca3af;
+
   --gold: #F2C041;
   --brown: #8B5E3C;
-  color: #fff;
+  --error: #ef4444;
+  --ok: #22c55e;
+  --warn: #f59e0b;
+
+  color: var(--text);
 }
 
-/* الخلفية العامة تبقى شفافة لأن AppBackground يرسم الخلفية */
-.theme-pyramids body, .theme-pyramids #root, .theme-pyramids .App {
+.theme-pyramids, .theme-pyramids body, .theme-pyramids #root {
   background: transparent !important;
+  color-scheme: dark;
 }
 
-/* البار العلوي الحالي (استهدف أي header أو عنصر يحمل id='topbar') */
+/* ======= رأس الصفحة (Top bar) ======= */
 .theme-pyramids header,
+.theme-pyramids .topbar,
+.theme-pyramids .navbar,
 .theme-pyramids #topbar {
   background: linear-gradient(180deg, rgba(242,192,65,0.20), rgba(242,192,65,0.06) 32%, transparent) !important;
   border-bottom: 1px solid var(--border) !important;
-  color: #fff !important;
-  backdrop-filter: blur(6px);
+  color: var(--text) !important;
+  backdrop-filter: blur(8px);
 }
 
-/* الشريط الأيسر الحالي (aside أو id='sidebar') */
+/* ======= الشريط الأيسر ======= */
 .theme-pyramids aside,
+.theme-pyramids .sidebar,
+.theme-pyramids .sidenav,
 .theme-pyramids #sidebar {
   background: linear-gradient(180deg, rgba(26,18,11,0.85), rgba(18,22,28,0.85)) !important;
   border-right: 1px solid var(--border) !important;
   box-shadow: inset 0 0 24px rgba(242,192,65,.10);
-  color: #fff !important;
+  color: var(--text) !important;
 }
 
 /* روابط القائمة داخل الشريط الأيسر */
 .theme-pyramids aside a,
+.theme-pyramids .sidebar a,
+.theme-pyramids .sidenav a,
 .theme-pyramids #sidebar a {
   color: #ffffffcc;
   background: var(--card);
@@ -44,28 +61,143 @@
   gap: 10px;
 }
 
-/* حالة Active (أضف class='active' لرابط الصفحة الحالية إن لم تكن موجودة) */
+/* Active link: أي من هذه الكلاسات/الصفات سيضبط الحالة */
 .theme-pyramids aside a.active,
-.theme-pyramids #sidebar a.active {
+.theme-pyramids .sidebar a.active,
+.theme-pyramids .sidenav a.active,
+.theme-pyramids #sidebar a.active,
+.theme-pyramids a.router-link-active,
+.theme-pyramids a[aria-current="page"] {
   color: #0B0F14 !important;
   background: linear-gradient(135deg, var(--gold), var(--brown)) !important;
   box-shadow: 0 0 18px rgba(242,192,65,.25), inset 0 0 1px rgba(255,255,255,.35);
+  border-color: transparent !important;
 }
 
-/* بطاقات/بانلز داخل المحتوى */
+/* ======= بطاقات، أقسام، بانلز ======= */
 .theme-pyramids .card,
-.theme-pyramids .bg-elev,
 .theme-pyramids .panel,
-.theme-pyramids main .rounded-2xl {
+.theme-pyramids .widget,
+.theme-pyramids .bg-elev,
+.theme-pyramids main .rounded,
+.theme-pyramids main .rounded-lg,
+.theme-pyramids main .rounded-xl,
+.theme-pyramids main .rounded-2xl,
+.theme-pyramids .container-card {
   background: var(--card) !important;
   border: 1px solid var(--border) !important;
-  color: #fff !important;
+  color: var(--text) !important;
 }
 
-/* زر ذهبي عام */
-.theme-pyramids .btn-primary {
+/* عناوين، نصوص خافتة */
+.theme-pyramids h1, .theme-pyramids h2, .theme-pyramids h3,
+.theme-pyramids h4, .theme-pyramids h5 {
+  color: var(--text);
+}
+.theme-pyramids .text-muted, .theme-pyramids .text-mute, .theme-pyramids .muted {
+  color: var(--muted) !important;
+}
+
+/* ======= جداول ======= */
+.theme-pyramids table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--text);
+}
+.theme-pyramids thead th {
+  background: var(--card-strong);
+  color: var(--text);
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+}
+.theme-pyramids tbody tr {
+  border-bottom: 1px solid var(--line);
+}
+.theme-pyramids tbody tr:hover {
+  background: rgba(255,255,255,0.03);
+}
+.theme-pyramids td, .theme-pyramids th {
+  padding: 10px 12px;
+}
+
+/* ======= نماذج (Inputs) ======= */
+.theme-pyramids input,
+.theme-pyramids select,
+.theme-pyramids textarea {
+  background: var(--bg-soft) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.theme-pyramids input::placeholder,
+.theme-pyramids textarea::placeholder {
+  color: #ffffff66;
+}
+
+/* ======= أزرار ======= */
+.theme-pyramids button,
+.theme-pyramids .btn {
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: all .2s ease;
+}
+.theme-pyramids .btn:hover,
+.theme-pyramids button:hover {
+  filter: brightness(1.06);
+}
+
+/* زر أساسي ذهبي */
+.theme-pyramids .btn-primary,
+.theme-pyramids button.primary,
+.theme-pyramids .btn--primary {
   color: #0B0F14 !important;
   background: linear-gradient(135deg, var(--gold), var(--brown)) !important;
   box-shadow: 0 0 22px rgba(242,192,65,.35), inset 0 0 1px rgba(255,255,255,.35);
   border: none !important;
+}
+
+/* حالات */
+.theme-pyramids .btn-danger   { background: linear-gradient(135deg, #ef4444, #b91c1c) !important; color: #fff; border: 0; }
+.theme-pyramids .btn-success  { background: linear-gradient(135deg, #22c55e, #15803d) !important; color: #fff; border: 0; }
+.theme-pyramids .btn-warning  { background: linear-gradient(135deg, #f59e0b, #b45309) !important; color: #1f2937; border: 0; }
+
+/* ======= مودالات / حوارات ======= */
+.theme-pyramids .modal,
+.theme-pyramids .dialog,
+.theme-pyramids [role="dialog"] {
+  background: var(--card-strong) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,.45);
+}
+
+/* ======= Toast/Alerts ======= */
+.theme-pyramids .alert, .theme-pyramids .toast {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-left: 4px solid var(--gold);
+}
+
+/* ======= تبويبات ======= */
+.theme-pyramids .tabs, .theme-pyramids .tablist { border-bottom: 1px solid var(--border); }
+.theme-pyramids .tab { color: var(--text-dim); padding: 8px 12px; }
+.theme-pyramids .tab.active { color: var(--text); border-bottom: 2px solid var(--gold); }
+
+/* ======= شريط التمرير (Scrollbar) ======= */
+.theme-pyramids ::-webkit-scrollbar { height: 10px; width: 10px; }
+.theme-pyramids ::-webkit-scrollbar-track { background: transparent; }
+.theme-pyramids ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--gold), var(--brown));
+  border-radius: 10px;
+  border: 2px solid rgba(0,0,0,.2);
+}
+
+/* ======= خطوط فاصلة ======= */
+.theme-pyramids hr, .theme-pyramids .divider {
+  border-color: var(--border) !important;
+  opacity: .8;
 }
