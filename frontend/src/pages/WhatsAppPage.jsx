@@ -1,4 +1,3 @@
-// frontend/src/pages/WhatsAppPage.jsx
 import { useState, useEffect } from "react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
@@ -60,23 +59,40 @@ export default function WhatsAppPage() {
   );
 
   const toggle = (phone) =>
-    setSelectedClients(prev => prev.includes(phone) ? prev.filter(p=>p!==phone) : [...prev, phone])
+    setSelectedClients(prev => prev.includes(phone) ? prev.filter(p=>p!==phone) : [...prev, phone]);
 
   async function syncWA(){
-    try { await fetch(url('/api/whatsapp/sync/google-csv?mode=mirror'), { method:'POST' });
-      await loadClients(); alert('WhatsApp list synced (imported into Clients).'); }
-    catch (e) { alert('Sync failed:\n' + e.message) }
+    try { 
+      await fetch(url('/api/whatsapp/sync/google-csv?mode=mirror'), { method:'POST' });
+      await loadClients(); 
+      alert('WhatsApp list synced (imported into Clients).'); 
+    }
+    catch (e) { alert('Sync failed:\n' + e.message); }
   }
 
   async function handleSend(){
-    if (!selectedClients.length || !message) { alert("Please select clients and write a message."); return; }
+    if (!selectedClients.length || !message) { 
+      alert("Please select clients and write a message."); 
+      return; 
+    }
     const res = await fetch(url('/api/whatsapp/send-bulk'), {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST', 
+      headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ to: selectedClients, message, mediaUrl: imageUrl || undefined }),
     });
     const data = await res.json();
-    if (res.ok && data.ok) alert("Messages sent successfully!"); else alert("Failed: " + (data?.error || (res.status + " " + res.statusText)));
+    if (res.ok && data.ok) alert("Messages sent successfully!"); 
+    else alert("Failed: " + (data?.error || (res.status + " " + res.statusText)));
   }
+
+  // ✅ إضافة زر تحديد الكل
+  const handleSelectAll = () => {
+    if (selectedClients.length === filtered.length) {
+      setSelectedClients([]); // إلغاء التحديد في حال الكل محدد
+    } else {
+      setSelectedClients(filtered.map(c => c.phone)); // تحديد الكل
+    }
+  };
 
   return (
     <div className="space-y-4 whatsapp-page">
@@ -99,13 +115,33 @@ export default function WhatsAppPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <h3 className="font-semibold mb-2">Clients</h3>
-              <input className="w-full border rounded p-2 mb-2" placeholder="Search by name or phone…" value={q} onChange={(e)=>setQ(e.target.value)} />
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-semibold">Clients</h3>
+                <Button 
+                  onClick={handleSelectAll}
+                  className="text-sm px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-black rounded-lg transition-all duration-300 shadow-md"
+                >
+                  {selectedClients.length === filtered.length ? "Unselect All" : "Select All"}
+                </Button>
+              </div>
+
+              <input 
+                className="w-full border rounded p-2 mb-2" 
+                placeholder="Search by name or phone…" 
+                value={q} 
+                onChange={(e)=>setQ(e.target.value)} 
+              />
+
               <div className="max-h-80 overflow-y-auto border rounded p-2">
                 {filtered.map(c => (
                   <label key={c._id || c.phone} className="flex items-center gap-2 py-1">
-                    <input type="checkbox" checked={selectedClients.includes(c.phone)} onChange={()=>toggle(c.phone)} />
-                    <span>{c.name}</span><span className="text-mute">({c.phone})</span>
+                    <input 
+                      type="checkbox" 
+                      checked={selectedClients.includes(c.phone)} 
+                      onChange={()=>toggle(c.phone)} 
+                    />
+                    <span>{c.name}</span>
+                    <span className="text-mute">({c.phone})</span>
                   </label>
                 ))}
               </div>
@@ -113,8 +149,19 @@ export default function WhatsAppPage() {
 
             <div>
               <h3 className="font-semibold mb-2">Message</h3>
-              <textarea className="w-full border rounded p-2" rows={6} value={message} onChange={(e)=>setMessage(e.target.value)} placeholder="Write your message here..." />
-              <input className="w-full border rounded p-2 my-2" placeholder="Image URL (optional)" value={imageUrl} onChange={(e)=>setImageUrl(e.target.value)} />
+              <textarea 
+                className="w-full border rounded p-2" 
+                rows={6} 
+                value={message} 
+                onChange={(e)=>setMessage(e.target.value)} 
+                placeholder="Write your message here..." 
+              />
+              <input 
+                className="w-full border rounded p-2 my-2" 
+                placeholder="Image URL (optional)" 
+                value={imageUrl} 
+                onChange={(e)=>setImageUrl(e.target.value)} 
+              />
               <Button className="btn-gold" onClick={handleSend}>Send</Button>
             </div>
           </div>
