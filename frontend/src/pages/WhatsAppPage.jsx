@@ -86,33 +86,37 @@ export default function WhatsAppPage() {
     else alert("Failed: " + (data?.error || (res.status + " " + res.statusText)));
   }
 
-  // ✅ تحديد الكل / إلغاء التحديد
   const handleSelectAll = () => {
-    if (selectedClients.length === filtered.length) {
-      setSelectedClients([]);
-    } else {
-      setSelectedClients(filtered.map(c => c.phone));
-    }
+    if (selectedClients.length === filtered.length) setSelectedClients([]);
+    else setSelectedClients(filtered.map(c => c.phone));
   };
 
-  // ✅ رفع الصورة إلى السيرفر
+  // ⬆️⬆️ رفع الصورة
   const handleUpload = async (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
+
     const formData = new FormData();
     formData.append("file", file);
     setUploading(true);
     try {
       const res = await fetch(url("/api/upload"), { method: "POST", body: formData });
-      const data = await res.json();
-      if (data?.url) {
-        setImageUrl(data.url);
-        alert("✅ Image uploaded successfully!");
-      } else {
-        alert("Upload failed: " + (data?.error || "Unknown error"));
+      const ctype = res.headers.get("content-type") || "";
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Upload failed (${res.status}). ${text.slice(0,200)}`);
       }
+      if (!ctype.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`Unexpected response. Not JSON:\n${text.slice(0,200)}`);
+      }
+      const data = await res.json();
+      if (!data?.url) throw new Error("Invalid response: missing url");
+      setImageUrl(data.url);
+      alert("✅ Image uploaded successfully!");
     } catch (err) {
-      alert("Upload failed: " + err.message);
+      alert(String(err.message || err));
     } finally {
       setUploading(false);
     }
@@ -181,7 +185,7 @@ export default function WhatsAppPage() {
                 placeholder="Write your message here..." 
               />
 
-              {/* ✅ زر رفع الصورة */}
+              {/* زر رفع الصورة */}
               <div className="my-2">
                 <label className="block text-sm mb-1 text-gray-300">Attach Image (optional)</label>
                 <input 
