@@ -1,0 +1,139 @@
+/* نطاق الثيم */
+.theme-pyramids {
+  --bg: #0B0F14;
+  --bg-soft: #0E1319;
+  --card: rgba(18,22,28,.78);
+  --card-strong: rgba(18,22,28,.92);
+  --border: rgba(255,255,255,.06);
+  --line: rgba(255,255,255,.08);
+  --text: #ffffff;
+  --text-dim: #d1d5db;
+  --muted: #9ca3af;
+  --gold: #F2C041;
+  --brown: #8B5E3C;
+  color: var(--text);
+}
+
+/* اجعل html/body/root شفافة لأن الخلفية تُرسم بواسطة AppBackground */
+html, body, #root { background: transparent !important; }
+
+/* أي عناصر شائعة قد تفرض الأبيض */
+.theme-pyramids .bg-white,
+.theme-pyramids [class*="bg-white"],
+.theme-pyramids [style*="background: white"],
+.theme-pyramids [style*="background-color: white"],
+.theme-pyramids .bg-light,
+.theme-pyramids .white-bg {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* رأس الصفحة */
+.theme-pyramids header,
+.theme-pyramids .topbar,
+.theme-pyramids .navbar,
+.theme-pyramids #topbar {
+  background: linear-gradient(180deg, rgba(242,192,65,0.20), rgba(242,192,65,0.06) 32%, transparent) !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  backdrop-filter: blur(8px);
+}
+
+/* الشريط الأيسر */
+.theme-pyramids aside,
+.theme-pyramids .sidebar,
+.theme-pyramids .sidenav,
+.theme-pyramids #sidebar {
+  background: linear-gradient(180deg, rgba(26,18,11,0.92), rgba(18,22,28,0.95)),
+              radial-gradient(circle at top left, rgba(242,192,65,0.15), transparent 70%);
+  background-blend-mode: screen;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  box-shadow:
+    inset 0 0 24px rgba(242,192,65,0.10),
+    inset 0 0 60px rgba(0,0,0,0.25);
+  color: #fff !important;
+  backdrop-filter: blur(10px);
+}
+
+/* روابط الشريط الأيسر */
+.theme-pyramids aside a,
+.theme-pyramids .sidebar a,
+.theme-pyramids .sidenav a,
+.theme-pyramids #sidebar a {
+  color: #ffffffcc;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.theme-pyramids aside a.active,
+.theme-pyramids .sidebar a.active,
+.theme-pyramids .sidenav a.active,
+.theme-pyramids #sidebar a.active,
+.theme-pyramids a.router-link-active,
+.theme-pyramids a[aria-current="page"] {
+  color: #0B0F14 !important;
+  background: linear-gradient(135deg, var(--gold), var(--brown)) !important;
+  box-shadow: 0 0 18px rgba(242,192,65,.25), inset 0 0 1px rgba(255,255,255,.35);
+  border-color: transparent !important;
+}
+
+/* البطاقات/الأقسام */
+.theme-pyramids .card,
+.theme-pyramids .panel,
+.theme-pyramids .widget,
+.theme-pyramids .bg-elev,
+.theme-pyramids main .rounded,
+.theme-pyramids main .rounded-lg,
+.theme-pyramids main .rounded-xl,
+.theme-pyramids main .rounded-2xl,
+.theme-pyramids .container-card {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+}
+
+/* الجداول */
+.theme-pyramids table { width: 100%; border-collapse: collapse; color: var(--text); }
+.theme-pyramids thead th { background: var(--card-strong); color: var(--text); border-bottom: 1px solid var(--line); font-weight: 600; }
+.theme-pyramids tbody tr { border-bottom: 1px solid var(--line); }
+.theme-pyramids tbody tr:hover { background: rgba(255,255,255,0.03); }
+.theme-pyramids td, .theme-pyramids th { padding: 10px 12px; }
+
+/* النماذج */
+.theme-pyramids input,
+.theme-pyramids select,
+.theme-pyramids textarea {
+  background: var(--bg-soft) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.theme-pyramids input::placeholder,
+.theme-pyramids textarea::placeholder { color: #ffffff66; }
+
+/* الأزرار */
+.theme-pyramids button,
+.theme-pyramids .btn {
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: all .2s ease;
+}
+.theme-pyramids .btn:hover, .theme-pyramids button:hover { filter: brightness(1.06); }
+
+/* زر أساسي ذهبي */
+.theme-pyramids .btn-primary,
+.theme-pyramids button.primary,
+.theme-pyramids .btn--primary {
+  color: #0B0F14 !important;
+  background: linear-gradient(135deg, var(--gold), var(--brown)) !important;
+  box-shadow: 0 0 22px rgba(242,192,65,.35), inset 0 0 1px rgba(255,255,255,.35);
+  border: none !important;
+}

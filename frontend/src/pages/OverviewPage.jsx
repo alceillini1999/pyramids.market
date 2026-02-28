@@ -1,131 +1,473 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import Section from '../components/Section'
+import React, { useEffect, useMemo, useState } from "react";
+import Section from "../components/Section";
+import Card from "../components/Card";
 import {
-  ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, AreaChart, Area
-} from 'recharts'
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  AreaChart,
+  Area,
+} from "recharts";
 
-const API_ORIG = (import.meta.env.VITE_API_URL || "").replace(/\/+$/,"");
-const API_BASE = API_ORIG.replace(/\/api$/,"");
-const url = (p) => `${API_BASE}${p.startsWith('/') ? p : `/${p}`}`;
+const API_ORIG = import.meta.env.VITE_API_URL || "";
+const API_BASE = (() => {
+  let s = String(API_ORIG || "");
+  while (s.endsWith("/")) s = s.slice(0, -1);
+  if (s.endsWith("/api")) s = s.slice(0, -4);
+  return s;
+})();
+const url = (p) => {
+  const path = p.startsWith("/") ? p : `/${p}`;
+  return `${API_BASE}${path}`;
+};
 
-const K = n => `KSh ${Number(n||0).toLocaleString('en-KE',{maximumFractionDigits:2})}`
+const K = (n) =>
+  `KSh ${Number(n || 0).toLocaleString("en-KE", { maximumFractionDigits: 2 })}`;
 
 // helpers
-const startOfDay = d => { const x=new Date(d); x.setHours(0,0,0,0); return x }
-const endOfDay   = d => { const x=new Date(d); x.setHours(23,59,59,999); return x }
-const sameDay = (a,b) => startOfDay(a).getTime() === startOfDay(b).getTime()
-const fmtD = d => new Date(d).toISOString().slice(0,10)
+const startOfDay = (d) => {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+};
+const endOfDay = (d) => {
+  const x = new Date(d);
+  x.setHours(23, 59, 59, 999);
+  return x;
+};
+const sameDay = (a, b) => startOfDay(a).getTime() === startOfDay(b).getTime();
+
+// IMPORTANT:
+// We use *local* calendar date (NOT UTC) because this page is a DAILY report.
+// Using toISOString().slice(0,10) can shift the date depending on timezone.
+const toLocalYMD = (d) => {
+  const x = new Date(d);
+  const y = x.getFullYear();
+  const m = String(x.getMonth() + 1).padStart(2, "0");
+  const day = String(x.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+const parseYMDLocal = (s) => {
+  const [y, m, d] = String(s || "").split("-").map((v) => parseInt(v, 10));
+  if (!y || !m || !d) return new Date();
+  return new Date(y, m - 1, d);
+};
+
+const fmtD = (d) => toLocalYMD(d);
+
+async function fetchJsonWithTimeout(input, init = {}, timeoutMs = 2500) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(input, { ...init, signal: ctrl.signal });
+    const data = await res.json().catch(() => ({}));
+    return { res, data };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+function StatIcon({ children }) {
+  return <span className="h-6 w-6 text-ink/70">{children}</span>;
+}
 
 export default function OverviewPage() {
-  const today = new Date().toISOString().slice(0,10)
-  const [fromDate, setFromDate] = useState(today)
-  const [toDate,   setToDate]   = useState(today)
+  // Daily report is ALWAYS for the current local date.
+  const [reportDate, setReportDate] = useState(() => toLocalYMD(new Date()));
 
-  const [sales, setSales] = useState([])
-  const [expenses, setExpenses] = useState([])
+  // Keep date in sync (if the tab stays open across midnight)
+  useEffect(() => {
+    const id = setInterval(() => {
+      const k = toLocalYMD(new Date());
+      setReportDate((prev) => (prev === k ? prev : k));
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
 
-  useEffect(()=>{(async()=>{
-    try{
-      const s = await (await fetch(url('/api/sales?page=1&limit=2000'), { credentials:'include' })).json()
-      const sRows = Array.isArray(s) ? s : (Array.isArray(s.rows)? s.rows : [])
-      setSales(sRows)
-      const e = await (await fetch(url('/api/expenses'), { credentials:'include' })).json()
-      setExpenses(Array.isArray(e) ? e : [])
-    }catch(e){ console.error(e) }
-  })()},[])
+  const [sales, setSales] = useState([]);
+  const [expenses, setExpenses] = useState([]);
 
-  const dFrom = useMemo(()=>startOfDay(new Date(fromDate)),[fromDate])
-  const dTo   = useMemo(()=>endOfDay(new Date(toDate)),[toDate])
-  const oneDay = useMemo(()=> sameDay(dFrom, dTo), [dFrom,dTo])
+  // Cashier (single day)
+  const [openInfo, setOpenInfo] = useState(null);
+  const [openInfoStatus, setOpenInfoStatus] = useState("idle"); // idle | loading | ok | timeout | error
+  const [withdrawals, setWithdrawals] = useState([]); // manual withdrawals from Google Sheet (single day)
 
-  // totals
-  const totals = useMemo(()=>{
-    const inRange = (t)=>{ const d=new Date(t); return d>=dFrom && d<=dTo }
-    const ts = sales.filter(s=>inRange(s.createdAt)).reduce((s,r)=>s + Number(r.total||0),0)
-    const te = expenses.filter(e=>inRange(e.date)).reduce((s,r)=>s + Number(r.amount||0),0)
-    return { totalSales: ts, totalExpenses: te, netProfit: ts - te }
-  },[sales, expenses, dFrom, dTo])
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = await (await fetch(url("/api/sales?page=1&limit=2000"), { credentials: "include" })).json();
+        const sRows = Array.isArray(s) ? s : Array.isArray(s?.rows) ? s.rows : [];
+        setSales(sRows);
 
-  // dataset
-  const chartData = useMemo(()=>{
-    const inRange = (t)=>{ const d=new Date(t); return d>=dFrom && d<=dTo }
-    if (oneDay) {
-      // بالساعات
-      const bS = Array(24).fill(0), bE = Array(24).fill(0)
-      sales.forEach(s=>{ if(inRange(s.createdAt)){ const h=new Date(s.createdAt).getHours(); bS[h]+=Number(s.total||0) }})
-      expenses.forEach(e=>{ if(inRange(e.date)){ const h=(new Date(e.date).getHours?.() ?? 0); bE[h]+=Number(e.amount||0) }})
-      return Array.from({length:24}).map((_,h)=>({ label:`${h}:00`, sales:bS[h], expenses:bE[h], net:bS[h]-bE[h] }))
+        const e = await (await fetch(url("/api/expenses"), { credentials: "include" })).json();
+        setExpenses(Array.isArray(e) ? e : []);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+  }, []);
+
+  const dFrom = useMemo(() => startOfDay(parseYMDLocal(reportDate)), [reportDate]);
+  const dTo = useMemo(() => endOfDay(parseYMDLocal(reportDate)), [reportDate]);
+
+  // Daily report => single day
+  const oneDay = true;
+  const dayKey = reportDate;
+
+  useEffect(() => {
+    if (!oneDay) {
+      setWithdrawals([]);
+      return;
     }
-    // بالأيام
-    const days = []
-    for (let d = startOfDay(dFrom); d <= dTo; d = new Date(d.getTime()+86400000)) days.push(fmtD(d))
-    const mapS = Object.create(null), mapE = Object.create(null)
-    days.forEach(d=>{ mapS[d]=0; mapE[d]=0 })
-    sales.forEach(s=>{ const d=fmtD(s.createdAt); if (d in mapS) mapS[d]+=Number(s.total||0) })
-    expenses.forEach(e=>{ const d=fmtD(e.date);     if (d in mapE) mapE[d]+=Number(e.amount||0) })
-    return days.map(d=>({ label:d, sales:mapS[d], expenses:mapE[d], net:mapS[d]-mapE[d] }))
-  },[sales, expenses, dFrom, dTo, oneDay])
+    (async () => {
+      try {
+        const res = await fetch(
+          url(`/api/manual-withdrawals?from=${encodeURIComponent(dayKey)}&to=${encodeURIComponent(dayKey)}`),
+          { credentials: "include", cache: "no-store" }
+        );
+        const data = await res.json().catch(() => ([]));
+        setWithdrawals(Array.isArray(data) ? data : []);
+      } catch {
+        setWithdrawals([]);
+      }
+    })();
+  }, [oneDay, dayKey]);
+
+  const withdrawalManual = useMemo(() => {
+    const sum = (src) => (withdrawals || []).filter((w) => w.source === src).reduce((s, w) => s + Number(w.amount || 0), 0);
+    const cash = sum("cash");
+    const till = sum("till");
+    const withdrawal = sum("withdrawal");
+    const sendMoney = sum("send_money");
+    return { cash, till, withdrawal, sendMoney, total: cash + till + withdrawal + sendMoney };
+  }, [withdrawals]);
+
+  // Load opening values from Cash page / backend sheet (single day)
+  useEffect(() => {
+    if (!oneDay) {
+      setOpenInfo(null);
+      setOpenInfoStatus("idle");
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      setOpenInfoStatus("loading");
+      try {
+        const { res, data } = await fetchJsonWithTimeout(
+          url(`/api/cash/today?date=${encodeURIComponent(dayKey)}`),
+          {
+            cache: "no-store",
+            credentials: "include",
+          },
+          2500
+        );
+
+        if (cancelled) return;
+
+        if (res.ok && data?.found && data?.row) {
+          const row = data.row;
+          setOpenInfo({
+            found: true,
+            date: dayKey,
+            openId: row.openId || row.openID || "",
+            openedAt: row.openedAt || "",
+            tillNo: String(row.tillNo || ""),
+            openingCashTotal: Number(row.openingCashTotal || 0),
+            openingTillTotal: Number(row.openingTillTotal || 0),
+            withdrawalCash: Number(row.withdrawalCash ?? row.mpesaWithdrawal ?? 0),
+            sendMoney: Number(row.sendMoney || 0),
+          });
+          setOpenInfoStatus("ok");
+          return;
+        }
+
+        setOpenInfo(null);
+        setOpenInfoStatus("ok");
+      } catch (e) {
+        if (cancelled) return;
+        if (e?.name === "AbortError") {
+          setOpenInfoStatus("timeout");
+          return;
+        }
+        setOpenInfoStatus("error");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [oneDay, dayKey]);
+
+  const totals = useMemo(() => {
+    const inRange = (t) => {
+      const d = new Date(t);
+      return d >= dFrom && d <= dTo;
+    };
+    const normPM = (r) => {
+      const raw = String(r?.paymentMethod ?? r?.payment ?? r?.method ?? "").trim().toLowerCase();
+      const s = raw.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+      if (s === "send money" || s === "sendmoney" || s === "send") return "send_money";
+      if (s === "withdrawel") return "withdrawal"; // common misspelling
+      return s;
+    };
+
+    const inRangeSales = sales.filter((s) => inRange(s.createdAt));
+    const totalSales = inRangeSales.reduce((sum, r) => sum + Number(r.total || 0), 0);
+    const cash = inRangeSales.reduce((sum, r) => (normPM(r) === "cash" ? sum + Number(r.total || 0) : sum), 0);
+    const till = inRangeSales.reduce((sum, r) => (normPM(r) === "till" ? sum + Number(r.total || 0) : sum), 0);
+    const withdrawal = inRangeSales.reduce(
+      (sum, r) => (normPM(r) === "withdrawal" ? sum + Number(r.total || 0) : sum),
+      0
+    );
+    const sendMoney = inRangeSales.reduce(
+      (sum, r) => (normPM(r) === "send_money" ? sum + Number(r.total || 0) : sum),
+      0
+    );
+
+    const totalExpenses = expenses.filter((e) => inRange(e.date)).reduce((s, r) => s + Number(r.amount || 0), 0);
+
+    return {
+      totalSales,
+      totalExpenses,
+      netProfit: totalSales - totalExpenses,
+      cash,
+      till,
+      withdrawal,
+      sendMoney,
+    };
+  }, [sales, expenses, dFrom, dTo]);
+
+  const openings = useMemo(() => {
+    if (!oneDay || !openInfo?.found) {
+      return { cash: 0, till: 0, withdrawal: 0, sendMoney: 0 };
+    }
+    return {
+      cash: Number(openInfo.openingCashTotal || 0),
+      till: Number(openInfo.openingTillTotal || 0),
+      withdrawal: Number(openInfo.withdrawalCash || 0),
+      sendMoney: Number(openInfo.sendMoney || 0),
+    };
+  }, [oneDay, openInfo]);
+
+  const cashierBalances = useMemo(() => {
+    if (!oneDay) {
+      return { cash: 0, till: 0, withdrawal: 0, sendMoney: 0, total: 0 };
+    }
+
+    const cash = openings.cash + Number(totals.cash || 0) - Number(withdrawalManual.cash || 0);
+    const till = openings.till + Number(totals.till || 0) - Number(withdrawalManual.till || 0);
+    const withdrawal = openings.withdrawal + Number(totals.withdrawal || 0) - Number(withdrawalManual.withdrawal || 0);
+    const sendMoney = openings.sendMoney + Number(totals.sendMoney || 0) - Number(withdrawalManual.sendMoney || 0);
+    return { cash, till, withdrawal, sendMoney, total: cash + till + withdrawal + sendMoney };
+  }, [oneDay, openings, totals, withdrawalManual]);
+
+  const chartData = useMemo(() => {
+    const inRange = (t) => {
+      const d = new Date(t);
+      return d >= dFrom && d <= dTo;
+    };
+
+    if (oneDay) {
+      // hourly
+      const bS = Array(24).fill(0);
+      const bE = Array(24).fill(0);
+      sales.forEach((s) => {
+        if (inRange(s.createdAt)) {
+          const h = new Date(s.createdAt).getHours();
+          bS[h] += Number(s.total || 0);
+        }
+      });
+      expenses.forEach((e) => {
+        if (inRange(e.date)) {
+          const h = new Date(e.date).getHours ? new Date(e.date).getHours() : 0;
+          bE[h] += Number(e.amount || 0);
+        }
+      });
+      return Array.from({ length: 24 }).map((_, h) => ({
+        label: `${h}:00`,
+        sales: bS[h],
+        expenses: bE[h],
+        net: bS[h] - bE[h],
+      }));
+    }
+
+    // daily
+    const days = [];
+    for (let d = startOfDay(dFrom); d <= dTo; d = new Date(d.getTime() + 86400000)) days.push(fmtD(d));
+    const mapS = Object.create(null);
+    const mapE = Object.create(null);
+    days.forEach((d) => {
+      mapS[d] = 0;
+      mapE[d] = 0;
+    });
+    sales.forEach((s) => {
+      const d = fmtD(s.createdAt);
+      if (d in mapS) mapS[d] += Number(s.total || 0);
+    });
+    expenses.forEach((e) => {
+      const d = fmtD(e.date);
+      if (d in mapE) mapE[d] += Number(e.amount || 0);
+    });
+    return days.map((d) => ({ label: d, sales: mapS[d], expenses: mapE[d], net: mapS[d] - mapE[d] }));
+  }, [sales, expenses, dFrom, dTo, oneDay]);
 
   return (
-    <div className="page-surface overview-page">
-      {/* شريط نطاق التاريخ */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <label className="text-white/80">From</label>
-        <input type="date" className="rounded-xl bg-white/90 text-black px-3 py-2"
-               value={fromDate} max={toDate} onChange={e=>setFromDate(e.target.value)} />
-        <label className="text-white/80">To</label>
-        <input type="date" className="rounded-xl bg-white/90 text-black px-3 py-2"
-               value={toDate} min={fromDate} onChange={e=>setToDate(e.target.value)} />
-      </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <div className="ui-h1">Daily Report</div>
+          <div className="ui-sub mt-1">Today's sales, expenses, payment methods, and cashier expected balances.</div>
+        </div>
 
-      {/* الكروت */}
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-3 mb-6">
-        <div className="rounded-2xl p-4 bg-transparent border border-white/10 backdrop-blur">
-          <div className="text-white/70 mb-1">Total Sales</div>
-          <div className="text-3xl font-semibold">{K(totals.totalSales)}</div>
-        </div>
-        <div className="rounded-2xl p-4 bg-transparent border border-white/10 backdrop-blur">
-          <div className="text-white/70 mb-1">Expenses</div>
-          <div className="text-3xl font-semibold">{K(totals.totalExpenses)}</div>
-        </div>
-        <div className="rounded-2xl p-4 bg-transparent border border-white/10 backdrop-blur">
-          <div className="text-white/70 mb-1">Net Profit</div>
-          <div className="text-3xl font-semibold">{K(totals.netProfit)}</div>
+        <div className="ui-card p-3 md:p-4 flex flex-wrap items-center gap-3">
+          <div className="text-xs font-bold uppercase tracking-wider text-mute">Date</div>
+          <div className="font-semibold text-ink">{dayKey}</div>
         </div>
       </div>
 
-      {/* الرسم */}
-      <Section title={oneDay ? "Hourly — Sales vs Expenses vs Net" : "Daily — Sales vs Expenses vs Net"}>
-        <div style={{ width:'100%', height: 360 }}>
+      {/* KPI cards */}
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+        <Card
+          title="Total Sales"
+          value={K(totals.totalSales)}
+          subtitle="Today's sales"
+          icon={
+            <StatIcon>
+              <svg viewBox="0 0 24 24">
+                <path fill="currentColor" d="M7 18q-.825 0-1.412-.587Q5 16.825 5 16V8q0-.825.588-1.412Q6.175 6 7 6h10q.825 0 1.413.588Q19 7.175 19 8v8q0 .825-.587 1.413Q17.825 18 17 18Z" />
+              </svg>
+            </StatIcon>
+          }
+        />
+        <Card
+          title="Expenses"
+          value={K(totals.totalExpenses)}
+          subtitle="Today's expenses"
+          icon={
+            <StatIcon>
+              <svg viewBox="0 0 24 24">
+                <path fill="currentColor" d="M12 1a11 11 0 1 0 0 22 11 11 0 0 0 0-22Zm1 17.93V20h-2v-1.07a8.13 8.13 0 0 1-3.68-1.5l1.14-1.63A6.52 6.52 0 0 0 12 17c1.36 0 2.25-.55 2.25-1.46 0-.94-.8-1.3-2.57-1.74-2.27-.56-3.7-1.35-3.7-3.32 0-1.6 1.14-2.82 3.02-3.18V4h2v1.25a6.9 6.9 0 0 1 3.04 1.24l-1.02 1.67A6.08 6.08 0 0 0 12 7c-1.48 0-1.95.67-1.95 1.33 0 .8.6 1.12 2.74 1.66 2.52.6 3.54 1.5 3.54 3.42 0 1.68-1.16 2.95-3.33 3.52Z" />
+              </svg>
+            </StatIcon>
+          }
+        />
+        <Card
+          title="Net Profit"
+          value={K(totals.netProfit)}
+          subtitle="Today: sales - expenses"
+          icon={
+            <StatIcon>
+              <svg viewBox="0 0 24 24">
+                <path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm0-4h-2V7h2v6Z" />
+              </svg>
+            </StatIcon>
+          }
+        />
+      </div>
+
+      {/* Payment method breakdown */}
+      <Section
+        title="Payment Method Breakdown"
+        subtitle="Computed from POS sales within the selected range"
+      >
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-4">
+          <Card title="Cash" value={K(totals.cash)} subtitle="Paid in Cash" />
+          <Card title="Till" value={K(totals.till)} subtitle="Paid via Till" />
+          <Card title="Withdrawal" value={K(totals.withdrawal)} subtitle="Paid via Withdrawal" />
+          <Card title="Send Money" value={K(totals.sendMoney)} subtitle="Paid via Send Money" />
+        </div>
+      </Section>
+
+      {/* Cashier (single day) */}
+      <Section
+        title="Cashier"
+        subtitle="Opening values are read from Cash page. Expected = Opening + Sales - Manual Withdrawals"
+      >
+        {!oneDay && (
+          <div className="ui-card p-4 text-sm text-mute">Set Range to a single day (From = To) to show cashier balances.</div>
+        )}
+
+        {oneDay && (
+          <>
+            {(openInfoStatus === "timeout" || openInfoStatus === "error") && (
+              <div className="ui-card p-4 text-sm">
+                <b>Note:</b> Could not load opening values from the server ({openInfoStatus}). If your backend is on a free plan it may be sleeping.
+              </div>
+            )}
+
+            {!openInfo?.found && openInfoStatus === "ok" && (
+              <div className="ui-card p-4 text-sm">
+                <b>No Start Day found</b> for {dayKey}. Open the day from the <b>Cash</b> page first.
+              </div>
+            )}
+
+            <div className="grid gap-4 grid-cols-1 md:grid-cols-4">
+              <Card title="Opening Cash" value={K(openings.cash)} subtitle={openInfo?.found ? "From Cash page" : "—"} />
+              <Card title="Opening Till" value={K(openings.till)} subtitle={openInfo?.found ? "From Cash page" : "—"} />
+              <Card title="Opening Withdrawal" value={K(openings.withdrawal)} subtitle={openInfo?.found ? "From Cash page" : "—"} />
+              <Card title="Opening Send Money" value={K(openings.sendMoney)} subtitle={openInfo?.found ? "From Cash page" : "—"} />
+            </div>
+
+            <div className="mt-4 grid gap-4 grid-cols-1 md:grid-cols-5">
+              <Card title="Expected Cash" value={K(cashierBalances.cash)} subtitle={`- Withdrawals: ${K(withdrawalManual.cash)}`} />
+              <Card title="Expected Till" value={K(cashierBalances.till)} subtitle={`- Withdrawals: ${K(withdrawalManual.till)}`} />
+              <Card title="Expected Withdrawal" value={K(cashierBalances.withdrawal)} subtitle={`- Withdrawals: ${K(withdrawalManual.withdrawal)}`} />
+              <Card title="Expected Send Money" value={K(cashierBalances.sendMoney)} subtitle={`- Withdrawals: ${K(withdrawalManual.sendMoney)}`} />
+              <Card title="Expected Total" value={K(cashierBalances.total)} subtitle="All methods" />
+            </div>
+
+            <div className="mt-4 ui-card p-4 text-sm text-mute">
+              To record manual withdrawals, go to <b>Summary</b> → <b>Manual Withdrawals</b>.
+            </div>
+          </>
+        )}
+      </Section>
+
+      {/* Chart */}
+      <Section title={oneDay ? "Hourly Trend" : "Daily Trend"} subtitle="Sales vs Expenses vs Net">
+        <div className="ui-card p-3 md:p-4" style={{ width: "100%", height: 360 }}>
           <ResponsiveContainer>
             {oneDay ? (
               <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.22)" strokeDasharray="4 4" />
-                <XAxis dataKey="label" stroke="#ffffff" tick={{ fill:'#ffffff' }} tickMargin={8}/>
-                <YAxis stroke="#ffffff" tick={{ fill:'#ffffff' }} tickMargin={8}/>
-                <Tooltip contentStyle={{ background:'rgba(0,0,0,0.7)', border:'1px solid rgba(255,255,255,0.15)', color:'#fff' }}
-                         labelStyle={{ color:'#fff' }} />
-                <Legend wrapperStyle={{ color:'#fff' }} />
-                <Line type="monotone" dataKey="sales"    name="Sales"      stroke="#F4C95D" strokeWidth={3} dot={false}/>
-                <Line type="monotone" dataKey="expenses" name="Expenses"   stroke="#B08946" strokeWidth={3} dot={false}/>
-                <Line type="monotone" dataKey="net"      name="Net Profit" stroke="#FFFFFF" strokeWidth={3} dot={false}/>
+                <CartesianGrid stroke="rgba(15,23,42,0.10)" strokeDasharray="4 4" />
+                <XAxis dataKey="label" stroke="#64748B" tick={{ fill: "#64748B" }} tickMargin={8} />
+                <YAxis stroke="#64748B" tick={{ fill: "#64748B" }} tickMargin={8} />
+                <Tooltip
+                  contentStyle={{ background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }}
+                  labelStyle={{ color: "#0F172A" }}
+                />
+                <Legend wrapperStyle={{ color: "#64748B" }} />
+                <Line type="monotone" dataKey="sales" name="Sales" stroke="#C57A2A" strokeWidth={3} dot={false} />
+                <Line type="monotone" dataKey="expenses" name="Expenses" stroke="#DC2626" strokeWidth={3} dot={false} />
+                <Line type="monotone" dataKey="net" name="Net Profit" stroke="#16A34A" strokeWidth={3} dot={false} />
               </LineChart>
             ) : (
               <AreaChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.22)" strokeDasharray="4 4" />
-                <XAxis dataKey="label" stroke="#ffffff" tick={{ fill:'#ffffff' }} tickMargin={8}/>
-                <YAxis stroke="#ffffff" tick={{ fill:'#ffffff' }} tickMargin={8}/>
-                <Tooltip contentStyle={{ background:'rgba(0,0,0,0.7)', border:'1px solid rgba(255,255,255,0.15)', color:'#fff' }}
-                         labelStyle={{ color:'#fff' }} />
-                <Legend wrapperStyle={{ color:'#fff' }} />
-                <Area type="monotone" dataKey="sales"    name="Sales"      stroke="#F4C95D" fill="rgba(244,201,93,.25)"  strokeWidth={3}/>
-                <Area type="monotone" dataKey="expenses" name="Expenses"   stroke="#B08946" fill="rgba(176,137,70,.22)" strokeWidth={3}/>
-                <Area type="monotone" dataKey="net"      name="Net Profit" stroke="#FFFFFF" fill="rgba(255,255,255,.18)" strokeWidth={3}/>
+                <CartesianGrid stroke="rgba(15,23,42,0.10)" strokeDasharray="4 4" />
+                <XAxis dataKey="label" stroke="#64748B" tick={{ fill: "#64748B" }} tickMargin={8} />
+                <YAxis stroke="#64748B" tick={{ fill: "#64748B" }} tickMargin={8} />
+                <Tooltip
+                  contentStyle={{ background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }}
+                  labelStyle={{ color: "#0F172A" }}
+                />
+                <Legend wrapperStyle={{ color: "#64748B" }} />
+                <Area type="monotone" dataKey="sales" name="Sales" stroke="#C57A2A" fill="rgba(197,122,42,.16)" strokeWidth={3} />
+                <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#DC2626" fill="rgba(220,38,38,.12)" strokeWidth={3} />
+                <Area type="monotone" dataKey="net" name="Net Profit" stroke="#16A34A" fill="rgba(22,163,74,.10)" strokeWidth={3} />
               </AreaChart>
             )}
           </ResponsiveContainer>
         </div>
       </Section>
     </div>
-  )
+  );
 }

@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation, Outlet } from "react-router-dom";
-import OverviewNeonAnimated from "../ui/theme/OverviewNeonAnimated"; // مسار نسبي
+import OverviewNeonAnimated from "../ui/theme/OverviewNeonAnimated";
 
 const C = {
   bg: "#0B0F14",
@@ -11,7 +11,7 @@ const C = {
 };
 
 const LINKS = [
-  { to: "/overview", label: "Overview", icon: "🏠" },
+  { to: "/overview", label: "Daily Report", icon: "🏠" },
   { to: "/whatsapp", label: "WhatsApp", icon: "💬" },
   { to: "/products", label: "Products", icon: "🧾" },
   { to: "/expenses", label: "Expenses", icon: "💸" },
@@ -20,21 +20,50 @@ const LINKS = [
   { to: "/sales", label: "Sales", icon: "📈" },
 ];
 
+function Brand({ size = 56, showText = true }) {
+  return (
+    <div className="flex items-center gap-4">
+      {/* اللوجو بدون صندوق */}
+      <img
+        src="/logo.png"
+        alt="Pyramids"
+        style={{ height: size }}
+        className="w-auto object-contain drop-shadow-lg"
+        draggable="false"
+      />
+
+      {showText && (
+        <div className="leading-tight">
+          <div className="text-white font-bold tracking-wide text-lg">
+            Pyramids
+          </div>
+          <div className="text-white/70 text-sm">
+            Egyptian Bakery
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TopBar() {
-  const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const now = new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
   return (
     <div
       className="sticky top-0 z-40 backdrop-blur-sm"
       style={{
-        background: "linear-gradient(180deg, rgba(242,192,65,0.20), rgba(242,192,65,0.06) 32%, transparent)",
+        background:
+          "linear-gradient(180deg, rgba(242,192,65,0.28), rgba(242,192,65,0.10) 40%, transparent)",
         borderBottom: `1px solid ${C.border}`,
       }}
     >
       <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="Pyramids Market" className="h-7 w-auto" />
-          <div className="text-white/90 font-semibold tracking-wide">Pyramids Market</div>
-        </div>
+        <Brand size={64} showText />
         <div className="text-white/70 text-sm">{now}</div>
       </div>
     </div>
@@ -43,23 +72,24 @@ function TopBar() {
 
 function SideBar() {
   const { pathname } = useLocation();
+
   return (
     <aside
       className="hidden md:block h-screen sticky top-0 pt-6"
       style={{
-        width: 240,
-        background: "linear-gradient(180deg, rgba(26,18,11,0.85), rgba(18,22,28,0.85))",
+        width: 260,
+        background:
+          "linear-gradient(180deg, rgba(26,18,11,0.88), rgba(18,22,28,0.88))",
         borderRight: `1px solid ${C.border}`,
-        boxShadow: "inset 0 0 24px rgba(242,192,65,.10)",
       }}
     >
       <div className="px-5">
-        <div className="flex items-center gap-2 mb-6">
-          <img src="/logo.png" alt="logo" className="h-8 w-auto" />
-          <div className="text-white/85 font-semibold">Pyramids Market</div>
+        <div className="mb-8">
+          <Brand size={72} showText />
         </div>
+
         <nav className="space-y-2">
-          {LINKS.map(l => {
+          {LINKS.map((l) => {
             const active = pathname.startsWith(l.to);
             return (
               <Link
@@ -68,7 +98,9 @@ function SideBar() {
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors border"
                 style={{
                   borderColor: C.border,
-                  background: active ? `linear-gradient(135deg, ${C.gold}, ${C.brown})` : C.card,
+                  background: active
+                    ? `linear-gradient(135deg, ${C.gold}, ${C.brown})`
+                    : C.card,
                   color: active ? "#0B0F14" : "#ffffffcc",
                 }}
               >
